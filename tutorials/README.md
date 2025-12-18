@@ -1,0 +1,126 @@
+# BackpackFlow v2.0 Tutorials
+
+Welcome to the BackpackFlow v2.0 tutorials! These examples demonstrate the new features and capabilities of BackpackFlow.
+
+## 🆕 v2.0 Tutorials
+
+### Research Agent Tutorial
+
+A complete example showcasing all v2.0 features:
+- **BackpackNode** with automatic metadata injection
+- **Flow** with namespace composition  
+- **Backpack** for state management with history
+- Multi-node workflows with proper tracing
+- Time-travel debugging capabilities
+
+**Run it:**
+```bash
+# Default query
+npm run tutorial:research-agent
+
+# Custom query
+npm run tutorial:research-agent "How does machine learning work?"
+
+# Or directly with ts-node
+npx ts-node tutorials/v2.0-research-agent.ts "your query here"
+```
+
+**What you'll see:**
+- 🤖 Intelligent query analysis
+- 🔍 Simulated research process
+- 📝 Summary synthesis
+- 📊 Complete execution trace
+- 📂 Namespace hierarchy
+- 💾 Backpack state inspection
+- ⏰ Time-travel snapshot demo
+
+**Output includes:**
+- Namespace composition: `research-agent.chat`, `research-agent.research`, etc.
+- Automatic metadata: nodeId, nodeName, namespace in every pack()
+- Full execution history with ~10 commits
+- Flow statistics and Backpack contents
+- Serialization snapshot for time-travel
+
+## 📚 Legacy Tutorials (v1.x)
+
+Previous tutorials have been moved to `tutorials/legacy/`:
+- Building AI from first principles
+- PocketFlow cookbook
+- Simple chatbot
+- Simple sales agent
+- Node templates
+
+These use the v1.x API and are kept for reference.
+
+## 🚀 Quick Start
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Run the v2.0 tutorial:**
+   ```bash
+   npm run tutorial:research-agent
+   ```
+
+3. **Explore the code:**
+   - Open `tutorials/v2.0-research-agent.ts`
+   - See how BackpackNode, Flow, and Backpack work together
+   - Notice the automatic namespace composition
+   - Check out the execution tracing
+
+## 🎯 Key Concepts Demonstrated
+
+### BackpackNode
+```typescript
+class ChatNode extends BackpackNode {
+    static namespaceSegment = "chat";  // ← Node identity
+    
+    async exec(prepRes: any) {
+        this.pack('data', value);  // ← Automatic metadata injection
+        return result;
+    }
+}
+```
+
+### Flow (Namespace Composer)
+```typescript
+const flow = new Flow({ namespace: 'research-agent' });
+const chat = flow.addNode(ChatNode, { id: 'chat' });
+// → chat.namespace = "research-agent.chat"
+```
+
+### Backpack (State + History)
+```typescript
+// Automatic tracking
+this.pack('key', value);  // Includes nodeId, nodeName, namespace
+
+// Query by namespace
+const data = this.unpackByNamespace('research-agent.*');
+
+// Time-travel
+const snapshot = flow.backpack.toJSON();
+const restored = Backpack.fromJSON(snapshot);
+```
+
+## 📖 Documentation
+
+For complete documentation, see:
+- [PRD-001: Backpack Architecture](../docs/v2.0/prds/PRD-001-backpack-architecture.md)
+- [TECH-SPEC-001: Implementation Guide](../docs/v2.0/specs/TECH-SPEC-001-backpack-implementation.md)
+- [Implementation Progress](../docs/v2.0/IMPLEMENTATION-PROGRESS.md)
+
+## 🤝 Contributing
+
+Want to add a tutorial? We'd love to see examples of:
+- Multi-agent systems
+- Custom node types
+- Complex workflows
+- Real API integrations
+- Advanced debugging scenarios
+
+## 📝 License
+
+MIT License - see [LICENSE](../LICENSE)
+
