@@ -18,7 +18,7 @@ Transform BackpackFlow from a code-only library into an **observable, config-rea
 
 ## Release Plan: v2.0.0 "The Observable Agent"
 
-**Target Release Date:** Q1 2026  
+**Target Release Date:** December 21, 2025 (Q4 2025)  
 **Release Goal:** Ship all three foundational systems together as a cohesive update.
 
 ### Why Release Together?
@@ -241,19 +241,19 @@ Enables "Low-Code" workflows by making nodes instantiable from JSON configs.
 
 ## Post-v2.0 Roadmap
 
-### v2.1: Enhanced Observability (Q2 2026)
+### v2.1: Enhanced Observability (Q1 2026)
 
 - **Web-Based Tracer UI** (Visualize events in browser)
 - **Event Persistence** (Save traces to database)
 - **Trace Replay** (Rerun flows from event logs)
 
-### v2.2: Advanced Config Features (Q3 2026)
+### v2.2: Advanced Config Features (Q2 2026)
 
 - **Config Migrations** (Auto-upgrade v1 → v2 configs)
 - **Conditional Edges** (JSON Logic for complex routing)
 - **Config Hot-Reloading** (Swap configs in running agents)
 
-### v3.0: Multi-Agent Orchestration (Q4 2026)
+### v3.0: Multi-Agent Orchestration (Q3 2026)
 
 - **Distributed Backpack** (Cross-process state sharing)
 - **Agent-to-Agent Communication** (Message passing)
@@ -303,25 +303,40 @@ Enables "Low-Code" workflows by making nodes instantiable from JSON configs.
 
 ## Architectural Decisions
 
-### AD-001: Node Namespaces (Added Dec 2025)
+### AD-001: Node Namespaces - Graph-Assigned Pattern (Added Dec 2025)
 
-**Decision:** Add optional `namespace` field to all nodes.
+**Decision:** Nodes define **segments**, Flows/Graphs compose **full namespace paths**.
 
 **Rationale:**
-- **Human-Readable Event Filtering:** `subscribe('sales.*')` vs UUID-based filtering
-- **Semantic Access Control:** `namespaceRead: ['auth.*']` in Backpack permissions
-- **Hierarchical Organization:** Support nested flows (`parent.child.grandchild`)
-- **Future-Proof:** Essential for v3.0 multi-agent coordination
+- **Reusability:** Same node class works in different contexts (e.g., `sales.summary`, `marketing.summary`)
+- **Loose Coupling:** Node doesn't hardcode parent hierarchy
+- **Easy Refactoring:** Change parent namespace, all children update automatically
+- **Config-Friendly:** JSON configs can define dynamic hierarchies
+- **Industry Standard:** Mirrors Kubernetes (Pod + Namespace), DNS (hostname + zone), Unix (filename + path)
+
+**Pattern:**
+```typescript
+// Node defines segment (like a filename)
+class SummaryNode extends BackpackNode {
+    static namespaceSegment = "summary";
+}
+
+// Flow composes full path (like a directory)
+const flow = new Flow({ namespace: "sales" });
+flow.addNode(SummaryNode);  // → "sales.summary"
+```
 
 **Impact:**
-- PRD-001: Add `sourceNamespace` to `BackpackItem` metadata
+- PRD-001: Add `sourceNamespace` to `BackpackItem` metadata, `namespaceSegment` to BackpackNode
 - PRD-002: Add `namespace` field to `BackpackEvent`, support wildcard subscription
-- PRD-003: Add `namespace` field to `NodeConfig`
+- PRD-003: Add `namespace` field to `NodeConfig` and `FlowConfig`
+- TECH-SPEC-001: Implement `composeNamespace()` algorithm in Flow class
 
 **Implementation:**
 - Namespaces are **optional** (not required for basic usage)
 - Format: Dot-separated paths (e.g., `"sales.research.chat"`)
 - Wildcards: Single-level (`sales.*`) in v2.0, deep matching (`sales.**`) in v2.1
+- Composition: `${parentNamespace}.${nodeSegment}` or use `nodeId` if no segment defined
 
 ---
 
@@ -374,7 +389,7 @@ Enables "Low-Code" workflows by making nodes instantiable from JSON configs.
 **Proposal:** Opt-in for v2.0 (default = no restrictions), mandatory in v3.0.
 
 **Q4:** Should namespace inheritance happen automatically in nested flows?  
-**Proposal:** Start with manual namespaces in v2.0, add auto-inheritance in v2.1 when we have sub-flow support.
+**Decision:** ✅ **Yes, implemented via Graph-Assigned Namespaces (AD-001).** Flows compose namespaces automatically using `${parentNamespace}.${nodeSegment}` pattern. Supports nested flows/subgraphs out of the box.
 
 ---
 
@@ -391,9 +406,11 @@ See individual PRDs for detailed task lists. Key contribution areas:
 ---
 
 **Related Documents:**
-- [PRD-001: Backpack Architecture](./docs/prds/PRD-001-backpack-architecture.md)
-- [PRD-002: Telemetry System](./docs/prds/PRD-002-telemetry-system.md)
-- [PRD-003: Serialization Bridge](./docs/prds/PRD-003-serialization-bridge.md)
-- [Original PRD](./docs/prds/PRD-legacy.md) *(Deprecated - superseded by PRD-001/002/003)*
-- [Migration Guide v1→v2](./docs/architecture/MIGRATION-v1-to-v2.md)
+- [PRD-001: Backpack Architecture](./docs/v2.0/prds/PRD-001-backpack-architecture.md)
+- [PRD-002: Telemetry System](./docs/v2.0/prds/PRD-002-telemetry-system.md)
+- [PRD-003: Serialization Bridge](./docs/v2.0/prds/PRD-003-serialization-bridge.md)
+- [TECH-SPEC-001: Backpack Implementation](./docs/v2.0/specs/TECH-SPEC-001-backpack-implementation.md)
+- [DECISIONS-AUDIT-v2.0](./docs/v2.0/specs/DECISIONS-AUDIT-v2.0.md)
+- [Migration Guide v1→v2](./docs/v2.0/migration/MIGRATION-v1-to-v2.md)
+- [Original PRD](./docs/legacy/PRD-legacy.md) *(Deprecated - superseded by PRD-001/002/003)*
 

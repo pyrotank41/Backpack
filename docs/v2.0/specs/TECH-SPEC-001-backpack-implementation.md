@@ -80,6 +80,107 @@ permissions: {
 
 ---
 
+### Decision 5: Graph-Assigned Namespace Composition
+
+**Question:** Should nodes define full namespace paths or just segments?
+
+**Decision:** **Nodes define segments, Flows/Graphs compose full paths.**
+
+**Rationale:**
+- **Reusability:** Same node class can be used in different contexts
+- **Loose Coupling:** Node doesn't need to know parent hierarchy
+- **Config-Friendly:** JSON configs can define dynamic hierarchies
+- **Industry Standard:** Mirrors Kubernetes (Pod + Namespace), DNS (hostname + zone)
+
+**Implementation Pattern:**
+
+```typescript
+// 1. Node defines static segment
+export abstract class BackpackNode extends BaseNode {
+    static namespaceSegment?: string;  // Optional segment identifier
+    namespace: string;                 // Full path (assigned by Flow)
+    
+    constructor(config: NodeConfig, context: NodeContext) {
+        super(config);
+        // Namespace is assigned by Flow, not by node itself
+        this.namespace = context.namespace;
+    }
+}
+
+// 2. Concrete node defines segment
+export class SummaryNode extends BackpackNode {
+    static namespaceSegment = "summary";  // Just the identity
+}
+
+// 3. Flow composes full namespace
+export class Flow {
+    private namespace: string;
+    
+    createNode(NodeClass: typeof BackpackNode, config: NodeConfig): BackpackNode {
+        const segment = NodeClass.namespaceSegment || config.id;
+        const fullNamespace = this.namespace 
+            ? `${this.namespace}.${segment}`
+            : segment;
+        
+        return new NodeClass(config, { 
+            namespace: fullNamespace,
+            backpack: this.backpack 
+        });
+    }
+}
+```
+
+**Namespace Composition Algorithm:**
+
+```typescript
+function composeNamespace(
+    parentNamespace: string | undefined,
+    nodeSegment: string | undefined,
+    nodeId: string
+): string {
+    // Priority: static segment > config segment > node ID
+    const segment = nodeSegment || nodeId;
+    
+    // Compose full path
+    if (!parentNamespace) return segment;
+    return `${parentNamespace}.${segment}`;
+}
+
+// Examples:
+composeNamespace("sales", "summary", "node-123")     → "sales.summary"
+composeNamespace("sales.reports", "daily", "n-1")    → "sales.reports.daily"
+composeNamespace(undefined, "root", "node-1")        → "root"
+composeNamespace("sales", undefined, "node-123")     → "sales.node-123"
+```
+
+**Config-Driven Example:**
+
+```json
+{
+  "version": "2.0.0",
+  "namespace": "sales",
+  "nodes": [
+    {
+      "id": "chat-node",
+      "type": "ChatNode"
+    }
+  ],
+  "subflows": [
+    {
+      "namespace": "reports",
+      "nodes": [
+        { "id": "daily", "type": "ReportNode" }
+      ]
+    }
+  ]
+}
+```
+**Produces:**
+- `sales.chat` (from ChatNode.namespaceSegment = "chat")
+- `sales.reports.daily` (nested composition)
+
+---
+
 ## 2. Class Structure
 
 ### Core Classes
@@ -113,7 +214,276 @@ BaseStorage (interface)
 Backpack<T extends BaseStorage>
     ↓
 [User's custom storage types]
+
+BaseNode (PocketFlow)
+    ↓
+BackpackNode (extends BaseNode)
+    ↓
+[User's custom nodes: ChatNode, ToolNode, etc.]
 ```
+
+### BackpackNode Class
+
+```typescript
+export abstract class BackpackNode extends BaseNode {
+    // Static: Node's segment identifier (like a filename)
+    static namespaceSegment?: string;
+    
+    // Instance: Full namespace path (assigned by Flow)
+    namespace: string;
+    
+    // Backpack instance (shared across flow)
+    protected backpack: Backpack;
+    
+    // Access permissions
+    abstract readonly permissions?: {
+        read?: string[];
+        write?: string[];
+        deny?: string[];
+        namespaceRead?: string[];
+        namespaceWrite?: string[];
+    };
+    
+    constructor(config: NodeConfig, context: NodeContext) {
+        super(config);
+        this.namespace = context.namespace;
+        this.backpack = context.backpack;
+    }
+    
+    // Override BaseNode's _run to inject Backpack context
+    async _run(input: any): Promise<any> {
+        // Automatic namespace injection on pack()
+        const originalPack = this.backpack.pack.bind(this.backpack);
+        this.backpack.pack = (key: string, value: any, options?: PackOptions) => {
+            return originalPack(key, value, {
+                ...options,
+                nodeId: this.id,
+                nodeName: this.constructor.name,
+                namespace: this.namespace
+            });
+        };
+        
+        return super._run(input);
+    }
+}
+
+export interface NodeContext {
+    namespace: string;
+    backpack: Backpack;
+    eventStreamer?: EventStreamer;
+}
+```
+
+### Flow Class (Namespace Composer)
+
+```typescript
+export class Flow {
+    private namespace: string;
+    private backpack: Backpack;
+    private nodes: Map<string, BackpackNode> = new Map();
+    
+    constructor(config: FlowConfig) {
+        this.namespace = config.namespace || '';
+        this.backpack = new Backpack();
+    }
+    
+    // Compose namespace and instantiate node
+    addNode(NodeClass: typeof BackpackNode, config: NodeConfig): BackpackNode {
+        const segment = NodeClass.namespaceSegment || config.id;
+        const fullNamespace = this.composeNamespace(segment);
+        
+        const node = new NodeClass(config, {
+            namespace: fullNamespace,
+            backpack: this.backpack
+        });
+        
+        this.nodes.set(config.id, node);
+        return node;
+    }
+    
+    // Namespace composition algorithm
+    private composeNamespace(segment: string): string {
+        if (!this.namespace) return segment;
+        return `${this.namespace}.${segment}`;
+    }
+    
+    // Support for nested flows/subgraphs
+    addSubflow(subflowConfig: FlowConfig): Flow {
+        const subflowNamespace = this.composeNamespace(subflowConfig.namespace || '');
+        return new Flow({
+            ...subflowConfig,
+            namespace: subflowNamespace,
+            backpack: this.backpack  // Share same Backpack
+        });
+    }
+}
+
+// Example: Agent node with internal flow
+export class ResearchAgentNode extends BackpackNode {
+    static namespaceSegment = "researchAgent";
+    
+    async exec(input: any) {
+        // Create internal flow that inherits parent namespace
+        const internalFlow = new Flow({
+            namespace: this.namespace,  // ✅ e.g., "sales.researchAgent"
+            backpack: this.backpack     // ✅ Share same Backpack
+        });
+        
+        // Add nodes - they'll inherit "sales.researchAgent" as parent
+        const chatNode = internalFlow.addNode(ChatNode, { id: "chat" });
+        const searchNode = internalFlow.addNode(SearchNode, { id: "search" });
+        const summaryNode = internalFlow.addNode(SummaryNode, { id: "summary" });
+        
+        // Define routing (edges)
+        chatNode.on("needs_search", searchNode);
+        chatNode.on("direct_answer", summaryNode);
+        searchNode.on("default", summaryNode);
+        
+        return await internalFlow.run(input);
+    }
+}
+
+/*
+Namespace hierarchy:
+  sales                           (parent flow)
+    └─ sales.researchAgent        (ResearchAgentNode)
+         ├─ sales.researchAgent.chat    (internal ChatNode)
+         ├─ sales.researchAgent.search  (internal SearchNode)
+         └─ sales.researchAgent.summary (internal SummaryNode)
+
+Flow routing:
+  chat → [needs_search] → search → [default] → summary
+  chat → [direct_answer] → summary
+*/
+```
+
+### How Flow Routing Works (Next Node Resolution)
+
+**Pattern:** Nodes return an "action" string, Flow uses it to look up the next node.
+
+#### 1. Node Returns Action from post()
+
+```typescript
+class ChatNode extends BackpackNode {
+    async post(shared: any, prepRes: any, execRes: any): Promise<string | undefined> {
+        const intent = execRes.detectedIntent;
+        
+        if (intent === "search_required") {
+            return "needs_search";  // ← Action string
+        } else {
+            return "direct_answer";  // ← Action string
+        }
+        
+        // Return undefined to end flow
+    }
+}
+```
+
+#### 2. Connect Nodes with .on(action, nextNode)
+
+```typescript
+const chatNode = new ChatNode(config, context);
+const searchNode = new SearchNode(config, context);
+const summaryNode = new SummaryNode(config, context);
+
+// Map actions to next nodes
+chatNode.on("needs_search", searchNode);    // If action="needs_search", go to searchNode
+chatNode.on("direct_answer", summaryNode);  // If action="direct_answer", go to summaryNode
+
+// "default" is a special action for linear flows
+searchNode.next(summaryNode);  // Sugar for: .on("default", summaryNode)
+```
+
+#### 3. Flow Orchestrator Resolves Next Node
+
+```typescript
+// From PocketFlow (inherited behavior)
+class Flow {
+    protected async _orchestrate(shared: any): Promise<void> {
+        let current: BaseNode | undefined = this.start;
+        
+        while (current) {
+            // 1. Run current node (prep → exec → post)
+            const action = await current._run(shared);
+            
+            // 2. Look up next node based on returned action
+            current = current.getNextNode(action);  // ← Checks _successors map
+            
+            // If no next node found, flow ends
+        }
+    }
+}
+
+// getNextNode() is inherited from PocketFlow's BaseNode:
+getNextNode(action: string = "default"): BaseNode | undefined {
+    const next = this._successors.get(action);
+    if (!next && this._successors.size > 0) {
+        console.warn(`Flow ends: '${action}' not found in successors`);
+    }
+    return next;
+}
+```
+
+#### 4. Config-Driven Edges (v2.0 - PRD-003)
+
+Instead of imperative `.on()` calls, define edges in JSON:
+
+```typescript
+interface FlowConfig {
+    namespace: string;
+    nodes: NodeConfig[];
+    edges: FlowEdge[];  // ← Define routing declaratively
+}
+
+interface FlowEdge {
+    from: string;      // Source node ID
+    to: string;        // Target node ID
+    condition: string; // Action string (v2.0) or JSON Logic (v2.1)
+}
+
+// Flow.fromConfig() converts edges to .on() calls
+class Flow {
+    static fromConfig(config: FlowConfig, backpack: Backpack): Flow {
+        const flow = new Flow({ namespace: config.namespace, backpack });
+        
+        // 1. Instantiate all nodes
+        const nodeMap = new Map<string, BackpackNode>();
+        for (const nodeConfig of config.nodes) {
+            const node = flow.addNode(getNodeClass(nodeConfig.type), nodeConfig);
+            nodeMap.set(nodeConfig.id, node);
+        }
+        
+        // 2. Build edges
+        for (const edge of config.edges) {
+            const fromNode = nodeMap.get(edge.from);
+            const toNode = nodeMap.get(edge.to);
+            fromNode.on(edge.condition, toNode);  // ← Same as imperative!
+        }
+        
+        return flow;
+    }
+}
+```
+
+**Example Config:**
+
+```json
+{
+    "namespace": "sales",
+    "nodes": [
+        { "id": "chat", "type": "ChatNode" },
+        { "id": "search", "type": "SearchNode" },
+        { "id": "summary", "type": "SummaryNode" }
+    ],
+    "edges": [
+        { "from": "chat", "to": "search", "condition": "needs_search" },
+        { "from": "chat", "to": "summary", "condition": "direct_answer" },
+        { "from": "search", "to": "summary", "condition": "default" }
+    ]
+}
+```
+
+**Key Insight:** Config-driven edges are **syntactic sugar** - they still use the same `.on()` mechanism under the hood!
 
 ---
 
@@ -777,12 +1147,21 @@ describe('Backpack', () => {
 - [ ] Pattern matching algorithm
 - [ ] Namespace query tests
 
-### Phase 5: Integration & Polish (Days 14-20)
+### Phase 5: Graph-Assigned Namespaces (Days 14-16)
+- [ ] `BackpackNode` base class with `namespaceSegment` static property
+- [ ] `Flow` class with namespace composition logic
+- [ ] `composeNamespace()` algorithm implementation
+- [ ] `NodeContext` interface for passing namespace + backpack
+- [ ] Support for nested flows/subgraphs
+- [ ] Config-driven namespace composition tests
+- [ ] Node reusability tests (same class, different contexts)
+
+### Phase 6: Integration & Polish (Days 17-20)
 - [ ] EventStreamer integration hooks
 - [ ] Serialization (`toJSON`/`fromJSON`)
 - [ ] Performance optimization
 - [ ] Documentation
-- [ ] Integration tests
+- [ ] Integration tests with real multi-agent scenarios
 - [ ] Code review & refinement
 
 ---
@@ -816,23 +1195,39 @@ describe('Backpack', () => {
 
 ```
 src/
-└── storage/
-    ├── backpack.ts              # Main Backpack class
-    ├── types.ts                 # BackpackItem, BackpackCommit, etc.
-    ├── access-control.ts        # AccessControl logic
-    ├── pattern-matcher.ts       # Namespace wildcard matching
-    └── errors.ts                # Custom error classes
+├── storage/
+│   ├── backpack.ts              # Main Backpack class
+│   ├── types.ts                 # BackpackItem, BackpackCommit, etc.
+│   ├── access-control.ts        # AccessControl logic
+│   ├── pattern-matcher.ts       # Namespace wildcard matching
+│   └── errors.ts                # Custom error classes
+│
+├── nodes/
+│   └── backpack-node.ts         # BackpackNode base class (extends BaseNode)
+│
+└── flows/
+    └── flow.ts                   # Flow class (namespace composer)
 
 tests/
-└── storage/
-    ├── backpack.test.ts
-    ├── access-control.test.ts
-    ├── time-travel.test.ts
-    └── namespace-queries.test.ts
+├── storage/
+│   ├── backpack.test.ts
+│   ├── access-control.test.ts
+│   ├── time-travel.test.ts
+│   └── namespace-queries.test.ts
+│
+├── nodes/
+│   └── backpack-node.test.ts
+│
+└── flows/
+    └── flow.test.ts              # Namespace composition tests
 ```
 
 ---
 
 **Ready to implement:** ✅  
-**Estimated LOC:** ~600 lines of implementation + 400 lines of tests
+**Estimated LOC:** ~800 lines of implementation + 600 lines of tests
+  - Backpack core: ~500 LOC
+  - BackpackNode: ~100 LOC
+  - Flow (namespace composer): ~200 LOC
+  - Tests: ~600 LOC
 

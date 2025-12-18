@@ -141,6 +141,98 @@ interface BackpackItem {
 }
 ```
 
+#### 3.2.1 Node Namespaces: Graph-Assigned Hierarchy
+
+**Design Pattern:** Nodes define **segments**, Graphs compose **full paths**.
+
+```typescript
+// ❌ BAD: Node hardcodes full path
+class SummaryNode extends BackpackNode {
+    constructor() {
+        this.namespace = "sales.summary";  // Tight coupling!
+    }
+}
+
+// ✅ GOOD: Node defines segment, Graph assigns full path
+class SummaryNode extends BackpackNode {
+    static namespaceSegment = "summary";  // Just the identity
+}
+
+// Graph composes the hierarchy
+const salesFlow = new Flow({
+    namespace: "sales",
+    nodes: [{ type: SummaryNode }]  // → "sales.summary"
+});
+
+const marketingFlow = new Flow({
+    namespace: "marketing",
+    nodes: [{ type: SummaryNode }]  // → "marketing.summary" (same class!)
+});
+```
+
+**Benefits:**
+- **Reusability:** Same node class works in different contexts
+- **Refactoring:** Change parent namespace, all children update
+- **Config-Driven:** JSON configs can define hierarchy
+- **Industry Standard:** Mirrors Kubernetes Pods, DNS zones, Unix paths
+
+**Namespace Composition Rules:**
+```typescript
+// 1. Simple composition
+parent: "sales" + segment: "summary" → "sales.summary"
+
+// 2. Nested composition
+parent: "sales.reports" + segment: "daily" → "sales.reports.daily"
+
+// 3. If node has no segment, use node ID
+parent: "sales" + segment: undefined → "sales.<nodeId>"
+
+// 4. If no parent, just use segment
+parent: undefined + segment: "root" → "root"
+```
+
+**Nested Flows (Internal Subgraphs):**
+
+When a node creates an internal flow (e.g., an Agent node that orchestrates multiple sub-nodes), pass `this.namespace` as the parent:
+
+```typescript
+// Example: Agent node with internal workflow
+class ResearchAgentNode extends BackpackNode {
+    static namespaceSegment = "researchAgent";
+    
+    async exec(input: any) {
+        // Create internal flow inheriting parent namespace
+        const internalFlow = new Flow({
+            namespace: this.namespace,  // e.g., "sales.researchAgent"
+            backpack: this.backpack     // Share same Backpack
+        });
+        
+        // Add internal nodes - they inherit parent namespace
+        internalFlow.addNode(ChatNode, { id: "chat" });
+        // → "sales.researchAgent.chat"
+        
+        internalFlow.addNode(SearchNode, { id: "search" });
+        // → "sales.researchAgent.search"
+        
+        return await internalFlow.run(input);
+    }
+}
+
+// Usage
+const mainFlow = new Flow({ namespace: "sales" });
+mainFlow.addNode(ResearchAgentNode, { id: "agent" });
+// → Creates hierarchy:
+//   sales.researchAgent (parent)
+//     ├─ sales.researchAgent.chat
+//     └─ sales.researchAgent.search
+```
+
+**Why This Works:**
+- ✅ Each internal node gets proper namespace hierarchy
+- ✅ All nodes share the same `Backpack` instance (no data isolation issues)
+- ✅ Event filtering works: `subscribe('sales.researchAgent.*')` captures all internal events
+- ✅ Access control works: `namespaceRead: ['researchAgent.*']` grants access to internal data
+
 ### 3.3 Immutable History (The Commit Log)
 
 Every `.pack()` creates a commit:
@@ -161,10 +253,13 @@ interface BackpackCommit {
 
 ### 3.4 Scoped Access (Solving Context Pollution)
 
-Nodes must declare what they need:
+Nodes must declare what they need. Namespaces are **composed by the Flow/Graph**, not hardcoded in nodes:
 
 ```typescript
 class SummaryNode extends BackpackNode {
+    // Node declares its segment (like a filename)
+    static namespaceSegment = "summary";
+    
     // Define access permissions (supports both key-based and namespace-based)
     readonly permissions = {
         read: ['researchResults', 'userQuery'],    // Can only see these keys
@@ -176,10 +271,8 @@ class SummaryNode extends BackpackNode {
         namespaceWrite: ['summary.*']              // Can write to 'summary' namespace
     };
     
-    constructor(params: any) {
-        super(params);
-        this.namespace = 'sales.summary';  // Set node's namespace
-    }
+    // ✅ namespace is assigned by Flow/Graph, not in constructor
+    // this.namespace will be composed as "sales.summary" by the Flow
     
     async exec(prepRes: any) {
         // ✅ This works (key-based)
@@ -192,7 +285,25 @@ class SummaryNode extends BackpackNode {
         const error = this.backpack.unpack('validationError', this.id);
     }
 }
+
+// Flow composes the full namespace path
+const salesFlow = new Flow({
+    namespace: "sales",  // Parent namespace
+    nodes: [
+        {
+            id: "summary-node",
+            type: SummaryNode,
+            // Final namespace: "sales.summary" (composed by Flow)
+        }
+    ]
+});
 ```
+
+**Why Graph-Assigned Namespaces?**
+- 🔄 **Reusability:** Same node class works in different contexts (`sales.summary`, `marketing.summary`)
+- 🛠️ **Easy Refactoring:** Change parent, all children update automatically
+- 📦 **Separation of Concerns:** Node knows its identity, Graph knows the structure
+- ✨ **Industry Standard:** Matches Kubernetes, DNS, Unix filesystem patterns
 
 ### 3.5 Sanitization API (Solving State Poisoning)
 
