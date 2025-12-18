@@ -86,7 +86,8 @@ Build your backend logic AND your web UI in the same language. Share types, sche
 ## 📍 Current Status & Roadmap
 
 - **Current Version**: v1.2.0 - Event-driven streaming + Explicit LLM client injection
-- **Next Major Release**: v2.0.0 - "The Observable Agent" (Q1 2026)
+- **Next Major Release**: v2.0.0 - "The Observable Agent"
+- **Target Release Date**: December 21, 2025 (Q4 2025)
 - **Phase**: Active Development
 - **Current Focus**: Backpack architecture, Telemetry system, Config serialization
 
@@ -103,23 +104,23 @@ Build your backend logic AND your web UI in the same language. Share types, sche
 - **⚡ Explicit Client Injection**: Full control over LLM clients for better testing and configuration
 - **📘 TypeScript First**: Full TypeScript support with type safety
 
-### 🚧 Coming in v2.0 (Q1 2026)
+### 🚧 Coming in v2.0 (December 21, 2025)
 
 **The Observable Agent Release** - Three foundational systems working together:
 
-#### 🎒 [PRD-001: Backpack Architecture](./docs/prds/PRD-001-backpack-architecture.md)
+#### 🎒 [PRD-001: Backpack Architecture](./docs/v2.0/prds/PRD-001-backpack-architecture.md)
 - **Scoped State Management**: Nodes declare what they can read/write - no more "junk drawer" context
 - **Source Tracking**: Every piece of data carries metadata (who added it, when, why)
 - **Time-Travel Debugging**: Snapshot state at any point to see exactly what the agent "knew"
 - **State Sanitization**: Failed operations don't leak into downstream nodes
 
-#### 📡 [PRD-002: Standardized Telemetry](./docs/prds/PRD-002-telemetry-system.md)
+#### 📡 [PRD-002: Standardized Telemetry](./docs/v2.0/prds/PRD-002-telemetry-system.md)
 - **Automatic Event Emission**: See lifecycle events (`NODE_START`, `PREP`, `EXEC`, `END`) without writing logging code
 - **Debug Prompts**: Inspect exact prompts sent to LLMs via `PREP_COMPLETE` events
 - **Parse Error Visibility**: See raw LLM responses before JSON parsing fails
 - **Flow Visualization**: Export events to build visual debuggers and tracers
 
-#### 🔌 [PRD-003: Serialization Bridge](./docs/prds/PRD-003-serialization-bridge.md)
+#### 🔌 [PRD-003: Serialization Bridge](./docs/v2.0/prds/PRD-003-serialization-bridge.md)
 - **Config-Driven Nodes**: Instantiate flows from JSON (enables drag-and-drop UIs)
 - **Type-Safe Configs**: Zod-validated schemas prevent broken deployments
 - **Dependency Injection**: Handle non-serializable objects (LLM clients) cleanly
