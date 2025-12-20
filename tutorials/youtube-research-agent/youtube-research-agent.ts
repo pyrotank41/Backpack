@@ -76,7 +76,7 @@ class YouTubeResearchAgent {
         const analysisNode = this.flow.addNode(DataAnalysisNode, {
             id: 'analysis',
             metric: 'views',
-            threshold: 10 // 10x median = outlier
+            threshold: 1.5 // 1.5x channel average = breakthrough video
         });
         
         // 3. Chat Completion Node (for insights)
@@ -208,12 +208,19 @@ Be specific and actionable.`
         
         // Display outlier videos
         if (outliers && outliers.length > 0) {
-            console.log(`🌟 Top ${Math.min(5, outliers.length)} Outlier Videos:\n`);
+            console.log(`🌟 Top ${Math.min(5, outliers.length)} Outlier Videos (Breakthrough Performers):\n`);
             
             outliers.slice(0, 5).forEach((video: any, index: number) => {
                 console.log(`${index + 1}. ${video.title}`);
                 console.log(`   Channel: ${video.channelTitle}`);
                 console.log(`   Views: ${this.formatNumber(video.views)}`);
+                
+                // Show outlier score if available
+                if (video.outlierScore && video.channelBaseline) {
+                    console.log(`   Channel's avg views: ${this.formatNumber(video.channelBaseline)}`);
+                    console.log(`   🚀 Performance: ${video.outlierScore.toFixed(1)}x better than channel average!`);
+                }
+                
                 console.log(`   Likes: ${this.formatNumber(video.likes)}`);
                 console.log(`   URL: ${video.url}\n`);
             });

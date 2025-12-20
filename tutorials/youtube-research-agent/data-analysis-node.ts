@@ -92,7 +92,7 @@ export class DataAnalysisNode extends BackpackNode {
             throw new Error('No data to analyze');
         }
         
-        // Extract metric values
+        // Extract metric values for overall statistics
         const values = data
             .map(item => this.extractMetricValue(item, metric))
             .filter(v => v !== null && v !== undefined && !isNaN(v)) as number[];
@@ -101,32 +101,88 @@ export class DataAnalysisNode extends BackpackNode {
             throw new Error(`No valid values found for metric: ${metric}`);
         }
         
-        // Calculate statistics
+        // Calculate overall statistics
         const statistics = this.calculateStatistics(values);
         
-        // Find outliers (values > threshold * median)
-        const outlierThreshold = statistics.median * threshold;
-        const outliers = data.filter(item => {
-            const value = this.extractMetricValue(item, metric);
-            return value !== null && value > outlierThreshold;
-        });
+        // Group videos by channel to calculate channel baselines
+        const channelGroups = this.groupByChannel(data);
         
-        // Sort outliers by metric value (descending)
-        outliers.sort((a, b) => {
-            const valueA = this.extractMetricValue(a, metric) || 0;
-            const valueB = this.extractMetricValue(b, metric) || 0;
-            return valueB - valueA;
-        });
+        // Calculate each channel's baseline (average views)
+        // Only use channels with at least 2 videos for more reliable baselines
+        const channelBaselines = new Map<string, number>();
+        
+        for (const [channelId, videos] of channelGroups.entries()) {
+            const channelValues = videos
+                .map(v => this.extractMetricValue(v, metric))
+                .filter(v => v !== null) as number[];
+            
+            if (channelValues.length >= 2) {
+                const avg = channelValues.reduce((sum, v) => sum + v, 0) / channelValues.length;
+                channelBaselines.set(channelId, avg);
+            }
+        }
+        
+        // Find outliers: videos performing threshold * better than their channel's baseline
+        const outliersWithScore: Array<{video: any, score: number, baseline: number}> = [];
+        
+        for (const item of data) {
+            const value = this.extractMetricValue(item, metric);
+            const channelId = item.channelId;
+            const baseline = channelBaselines.get(channelId);
+            
+            if (value !== null && baseline && baseline > 0) {
+                const score = value / baseline;
+                
+                // Video is an outlier if it's performing threshold * better than channel average
+                if (score >= threshold) {
+                    outliersWithScore.push({
+                        video: item,
+                        score,
+                        baseline
+                    });
+                }
+            }
+        }
+        
+        // Sort outliers by score (descending)
+        outliersWithScore.sort((a, b) => b.score - a.score);
+        
+        // Extract just the videos (but keep score for display)
+        const outliers = outliersWithScore.map(o => ({
+            ...o.video,
+            outlierScore: o.score,
+            channelBaseline: o.baseline
+        }));
         
         // Generate insights
         const insights = this.generateInsights(statistics, outliers.length, threshold, metric);
+        insights.push(`Outliers are videos performing ${threshold}x+ better than their channel's average ${metric}`);
         
         return {
             outliers,
             statistics,
             insights,
-            threshold: outlierThreshold
+            threshold // This is now the multiplier, not an absolute value
         };
+    }
+    
+    /**
+     * Group videos by channel
+     */
+    private groupByChannel(data: any[]): Map<string, any[]> {
+        const groups = new Map<string, any[]>();
+        
+        for (const item of data) {
+            const channelId = item.channelId || 'unknown';
+            
+            if (!groups.has(channelId)) {
+                groups.set(channelId, []);
+            }
+            
+            groups.get(channelId)!.push(item);
+        }
+        
+        return groups;
     }
     
     /**
@@ -243,18 +299,23 @@ export class DataAnalysisNode extends BackpackNode {
         // Create prompt for LLM to explain why these videos are outliers
         const outliersText = output.outliers.map((item: any, index: number) => {
             const metricValue = this.extractMetricValue(item, this.metric) || 0;
+            const score = item.outlierScore || 1;
+            const baseline = item.channelBaseline || 0;
             return `${index + 1}. "${item.title}" by ${item.channelTitle}
-   - Views: ${item.views.toLocaleString()}
-   - Likes: ${item.likes.toLocaleString()}
-   - ${this.metric}: ${metricValue.toLocaleString()}`;
+   - Views: ${metricValue.toLocaleString()}
+   - Channel's average views: ${baseline.toLocaleString()}
+   - Performance: ${score.toFixed(1)}x better than channel average! 🚀
+   - Likes: ${item.likes.toLocaleString()}`;
         }).join('\n\n');
         
-        const prompt = `You are a YouTube research analyst. I found ${output.outliers.length} videos that are performing ${output.threshold}x better than average.
+        const prompt = `You are a YouTube research analyst. I found ${output.outliers.length} videos that are TRUE OUTLIERS - performing ${output.threshold}x+ better than their own channel's average performance.
 
-Statistics:
-- Average ${this.metric}: ${output.statistics.mean.toFixed(2)}
-- Median ${this.metric}: ${output.statistics.median.toFixed(2)}
-- Threshold for outliers (${output.threshold}x median): ${(output.statistics.median * output.threshold).toFixed(2)}
+IMPORTANT: These are not just popular videos. These are videos that broke through and performed exceptionally well RELATIVE TO THE CHANNEL'S TYPICAL PERFORMANCE. A small channel's viral video is just as interesting as a large channel's breakout hit.
+
+Overall Dataset Statistics:
+- Total videos analyzed: ${output.statistics.count}
+- Average ${this.metric} (all videos): ${output.statistics.mean.toLocaleString()}
+- Median ${this.metric} (all videos): ${output.statistics.median.toLocaleString()}
 
 Outlier Videos:
 ${outliersText}
