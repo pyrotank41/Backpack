@@ -5,7 +5,9 @@
  * Handles streaming, retries, token counting, and error handling automatically.
  */
 
+import { z } from 'zod';
 import { BackpackNode, NodeConfig, NodeContext } from '../../src/nodes/backpack-node';
+import { DataContract } from '../../src/serialization/types';
 import OpenAI from 'openai';
 
 export interface ChatCompletionConfig extends NodeConfig {
@@ -55,6 +57,32 @@ export interface ChatCompletionOutput {
 export class BaseChatCompletionNode extends BackpackNode {
     static namespaceSegment = "chat";
     
+    /**
+     * Input data contract (PRD-005 - Zod Implementation)
+     */
+    static inputs: DataContract = {
+        prompt: z.string()
+            .min(1, 'Prompt cannot be empty')
+            .describe('The prompt to send to the LLM')
+    };
+    
+    /**
+     * Output data contract (PRD-005 - Zod Implementation)
+     * 
+     * Defines exact structure including optional usage statistics
+     */
+    static outputs: DataContract = {
+        chatResponse: z.string()
+            .min(1, 'LLM response cannot be empty')
+            .describe('The LLM response text'),
+        usage: z.object({
+            promptTokens: z.number(),
+            completionTokens: z.number(),
+            totalTokens: z.number()
+        }).optional()
+            .describe('Token usage statistics from the LLM API')
+    };
+    
     private model: string;
     private temperature: number;
     private maxTokens: number;
@@ -73,6 +101,23 @@ export class BaseChatCompletionNode extends BackpackNode {
         this.client = new OpenAI({
             apiKey: config.apiKey || process.env.OPENAI_API_KEY
         });
+    }
+    
+    /**
+     * Serialize to config (PRD-003)
+     */
+    toConfig(): NodeConfig {
+        return {
+            type: 'BaseChatCompletionNode',
+            id: this.id,
+            params: {
+                model: this.model,
+                temperature: this.temperature,
+                maxTokens: this.maxTokens,
+                systemPrompt: this.systemPrompt,
+                apiKey: '***' // Don't expose API key
+            }
+        };
     }
     
     /**

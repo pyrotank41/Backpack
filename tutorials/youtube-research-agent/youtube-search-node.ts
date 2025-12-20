@@ -5,7 +5,9 @@
  * Handles API rate limits and provides rich video metadata.
  */
 
+import { z } from 'zod';
 import { BackpackNode, NodeConfig, NodeContext } from '../../src/nodes/backpack-node';
+import { DataContract } from '../../src/serialization/types';
 
 export interface YouTubeSearchConfig extends NodeConfig {
     apiKey: string;
@@ -18,20 +20,32 @@ export interface YouTubeSearchInput {
     publishedAfter?: Date;
 }
 
-export interface YouTubeVideo {
-    id: string;
-    title: string;
-    channelTitle: string;
-    channelId: string;
-    views: number;
-    likes: number;
-    comments: number;
-    publishedAt: Date;
-    duration: string;
-    thumbnail: string;
-    url: string;
-    description: string;
-}
+/**
+ * YouTube Video Schema (Zod)
+ * 
+ * Defines the shape and validation rules for YouTube video metadata
+ */
+export const YouTubeVideoSchema = z.object({
+    id: z.string(),
+    title: z.string(),
+    channelTitle: z.string(),
+    channelId: z.string(),
+    views: z.number(),
+    likes: z.number(),
+    comments: z.number(),
+    publishedAt: z.date(),
+    duration: z.string(),
+    thumbnail: z.string().url(),
+    url: z.string().url(),
+    description: z.string()
+});
+
+/**
+ * YouTube Video Type (inferred from Zod schema)
+ * 
+ * Single source of truth - type is automatically derived from schema
+ */
+export type YouTubeVideo = z.infer<typeof YouTubeVideoSchema>;
 
 export interface YouTubeSearchOutput {
     videos: YouTubeVideo[];
@@ -63,6 +77,27 @@ export interface YouTubeSearchOutput {
 export class YouTubeSearchNode extends BackpackNode {
     static namespaceSegment = "youtube.search";
     
+    /**
+     * Input data contract (PRD-005 - Zod Implementation)
+     * 
+     * Validates input data at runtime with detailed error messages
+     */
+    static inputs: DataContract = {
+        searchQuery: z.string()
+            .min(1)
+            .describe('YouTube search query (e.g., "AI productivity tools")')
+    };
+    
+    /**
+     * Output data contract (PRD-005 - Zod Implementation)
+     * 
+     * Defines the exact shape of output data including nested object properties
+     */
+    static outputs: DataContract = {
+        searchResults: z.array(YouTubeVideoSchema)
+            .describe('Array of YouTube videos with full metadata (title, views, channel, likes, etc.)')
+    };
+    
     private apiKey: string;
     private maxResults: number;
     private baseUrl = 'https://www.googleapis.com/youtube/v3';
@@ -76,6 +111,20 @@ export class YouTubeSearchNode extends BackpackNode {
         if (!this.apiKey) {
             throw new Error('YouTube API key is required');
         }
+    }
+    
+    /**
+     * Serialize to config (PRD-003)
+     */
+    toConfig(): NodeConfig {
+        return {
+            type: 'YouTubeSearchNode',
+            id: this.id,
+            params: {
+                apiKey: '***', // Don't expose API key in serialization
+                maxResults: this.maxResults
+            }
+        };
     }
     
     /**

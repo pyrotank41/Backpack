@@ -10,10 +10,11 @@
 import { Flow } from '../../src/flows/flow';
 import { Backpack } from '../../src/storage/backpack';
 import { EventStreamer, StreamEventType } from '../../src/events';
-import { BackpackNode } from '../../src/nodes/backpack-node';
+import { BackpackNode, NodeConfig } from '../../src/nodes/backpack-node';
 import { BaseChatCompletionNode } from './base-chat-completion-node';
 import { YouTubeSearchNode } from './youtube-search-node';
 import { DataAnalysisNode } from './data-analysis-node';
+import { FlowLoader } from '../../src/serialization/flow-loader';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -36,6 +37,17 @@ dotenv.config();
 class YouTubeResearchAgentNode extends BackpackNode {
     static namespaceSegment = "agent";
     
+    /**
+     * Serialize to config (PRD-003)
+     */
+    toConfig(): NodeConfig {
+        return {
+            type: 'YouTubeResearchAgentNode',
+            id: this.id,
+            params: {}
+        };
+    }
+    
     async prep(shared: any): Promise<any> {
         // Get query from backpack
         const query = this.unpackRequired<string>('searchQuery');
@@ -43,16 +55,13 @@ class YouTubeResearchAgentNode extends BackpackNode {
     }
     
     async _exec(input: any): Promise<any> {
-        // Create internal flow that inherits our namespace
+        // ✨ Create internal flow using standard helper (PRD-004)
+        // This automatically inherits namespace, backpack, and eventStreamer
         // If we're at "youtube.research.agent", internal nodes become:
         // - "youtube.research.agent.search"
         // - "youtube.research.agent.analysis"
         // - "youtube.research.agent.summary"
-        const internalFlow = new Flow({
-            namespace: this.namespace,
-            backpack: this.backpack,
-            eventStreamer: (this as any).eventStreamer
-        });
+        const internalFlow = this.createInternalFlow();
         
         // 1. YouTube Search Node
         const searchNode = internalFlow.addNode(YouTubeSearchNode, {
@@ -82,12 +91,13 @@ class YouTubeResearchAgentNode extends BackpackNode {
 Be specific and actionable.`
         });
         
-        // Setup flow edges (routing)
-        searchNode.on('complete', analysisNode);
-        analysisNode.on('complete', summaryNode);
+        // ✨ Setup flow edges using convenience methods (PRD-004)
+        searchNode.onComplete(analysisNode);
+        analysisNode.onComplete(summaryNode);
         
         // Set entry node and run
         internalFlow.setEntryNode(searchNode);
+        
         await internalFlow.run({});
         
         return { success: true };
@@ -269,8 +279,8 @@ class YouTubeResearchAgent {
             console.log(`✅ Flow Complete!`);
             console.log(`${'─'.repeat(80)}`);
             
-            // Show the architecture that was executed
-            this.displayFlowArchitecture();
+            // Display flow structure as JSON
+            this.displayFlowJSON();
             
             // Display execution summary
             this.displayExecutionSummary();
@@ -285,55 +295,34 @@ class YouTubeResearchAgent {
     }
     
     /**
-     * Display the flow architecture dynamically from event history
-     * Shows the actual execution structure with nested flows
+     * Display the flow structure as JSON using Serialization Bridge (PRD-003)
+     * This demonstrates "eating our own dogfood" - using the exportFlow we built!
      */
-    private displayFlowArchitecture(): void {
-        console.log(`\n📊 FLOW ARCHITECTURE`);
+    private displayFlowJSON(): void {
+        console.log(`\n📊 FLOW STRUCTURE (Serialized via PRD-003)`);
         console.log(`${'─'.repeat(80)}\n`);
         
-        // Build node tree from event history
-        const history = this.streamer.getHistory();
-        const nodes: Array<{ name: string, namespace: string }> = [];
-        
-        for (const event of history) {
-            if (event.type === StreamEventType.NODE_START) {
-                const nodeName = event.sourceNode;
-                const namespace = event.namespace || '';
-                if (!nodes.find(n => n.namespace === namespace)) {
-                    nodes.push({ name: nodeName, namespace });
-                }
-            }
-        }
-        
-        // Sort by namespace depth to show hierarchy
-        nodes.sort((a, b) => {
-            const depthA = a.namespace.split('.').length;
-            const depthB = b.namespace.split('.').length;
-            if (depthA !== depthB) return depthA - depthB;
-            return a.namespace.localeCompare(b.namespace);
-        });
-        
-        console.log(`   User Input`);
-        console.log(`        ↓`);
-        
-        for (const node of nodes) {
-            const depth = node.namespace.split('.').length - 2; // Subtract base depth
-            const indent = '      '.repeat(Math.max(0, depth));
-            const isParent = nodes.some(n => n.namespace.startsWith(node.namespace + '.'));
-            const marker = isParent ? '📦' : '⚙️ ';
+        try {
+            const loader = new FlowLoader();
             
-            console.log(`${indent}${marker} ${node.name}`);
-            console.log(`${indent}   (${node.namespace})`);
+            // Export main flow
+            console.log(`Main Flow:`);
+            const flowConfig = loader.exportFlow(this.flow);
+            console.log(JSON.stringify(flowConfig, null, 2));
             
-            if (isParent) {
-                console.log(`${indent}   ├─ Internal Flow:`);
-            } else {
-                console.log(`${indent}        ↓`);
-            }
+            // // Export internal flow if available
+            // const agentNode = this.flow.getAllNodes()[0] as any;
+            // if (agentNode && agentNode.internalFlow) {
+            //     console.log(`\nInternal Flow (inside ${agentNode.constructor.name}):`);
+            //     const internalConfig = loader.exportFlow(agentNode.internalFlow);
+            //     console.log(JSON.stringify(internalConfig, null, 2));
+            // }
+            
+            // console.log();
+            
+        } catch (error: any) {
+            console.log(`   ⚠️  Flow serialization failed: ${error.message}\n`);
         }
-        
-        console.log(`   Final Results\n`);
     }
     
     /**
@@ -503,7 +492,7 @@ class YouTubeResearchAgent {
  */
 async function main() {
     // Get query from command line args
-    const query = process.argv[2] || 'AI productivity tools';
+    const query = process.argv[2] || 'AI automation agency';
     
     // Check for required environment variables
     if (!process.env.YOUTUBE_API_KEY) {

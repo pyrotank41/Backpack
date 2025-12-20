@@ -135,6 +135,18 @@ export class Flow<S = any> {
     }
     
     /**
+     * Register an already-instantiated node in the flow
+     * 
+     * Used by FlowLoader when deserializing nodes that were created via fromConfig()
+     * 
+     * @param id - Node ID
+     * @param node - Node instance
+     */
+    registerNode(id: string, node: BackpackNode): void {
+        this.nodes.set(id, node);
+    }
+    
+    /**
      * Compose namespace from parent namespace + segment
      * 
      * Examples:

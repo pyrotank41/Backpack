@@ -5,7 +5,10 @@
  * Supports multiple metrics and configurable thresholds.
  */
 
+import { z } from 'zod';
 import { BackpackNode, NodeConfig, NodeContext } from '../../src/nodes/backpack-node';
+import { DataContract } from '../../src/serialization/types';
+import { YouTubeVideoSchema, YouTubeVideo } from './youtube-search-node';
 
 export interface DataAnalysisConfig extends NodeConfig {
     metric: string;
@@ -59,6 +62,42 @@ export interface DataAnalysisOutput {
 export class DataAnalysisNode extends BackpackNode {
     static namespaceSegment = "analysis";
     
+    /**
+     * Input data contract (PRD-005 - Zod Implementation)
+     * 
+     * Reuses YouTubeVideoSchema for type safety and validation
+     */
+    static inputs: DataContract = {
+        searchResults: z.array(YouTubeVideoSchema)
+            .min(1, 'Need at least one video to analyze')
+            .describe('Array of YouTube videos to analyze for breakthrough content')
+    };
+    
+    /**
+     * Output data contract (PRD-005 - Zod Implementation)
+     * 
+     * Defines exact structure of all outputs including nested objects
+     */
+    static outputs: DataContract = {
+        outliers: z.array(YouTubeVideoSchema)
+            .describe('Videos identified as breakthrough content (performing above channel baseline)'),
+        statistics: z.object({
+            mean: z.number(),
+            median: z.number(),
+            stdDev: z.number(),
+            min: z.number(),
+            max: z.number(),
+            count: z.number()
+        }).describe('Statistical summary of video performance across all videos'),
+        insights: z.array(z.string())
+            .describe('Generated insights about patterns in breakthrough videos'),
+        outlierThreshold: z.number()
+            .describe('The threshold multiplier used to identify outliers'),
+        prompt: z.string()
+            .min(1)
+            .describe('Generated prompt for LLM to analyze and explain the outliers')
+    };
+    
     private metric: string;
     private threshold: number;
     
@@ -67,6 +106,20 @@ export class DataAnalysisNode extends BackpackNode {
         
         this.metric = config.metric;
         this.threshold = config.threshold ?? 10;
+    }
+    
+    /**
+     * Serialize to config (PRD-003)
+     */
+    toConfig(): NodeConfig {
+        return {
+            type: 'DataAnalysisNode',
+            id: this.id,
+            params: {
+                metric: this.metric,
+                threshold: this.threshold
+            }
+        };
     }
     
     /**
