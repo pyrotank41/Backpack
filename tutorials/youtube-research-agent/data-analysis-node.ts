@@ -73,7 +73,7 @@ export class DataAnalysisNode extends BackpackNode {
      * Preparation phase: Extract data from backpack
      */
     async prep(shared: any): Promise<DataAnalysisInput> {
-        const data = this.unpackRequired<any[]>('dataToAnalyze');
+        const data = this.unpackRequired<any[]>('searchResults');
         
         return {
             data,
@@ -239,6 +239,34 @@ export class DataAnalysisNode extends BackpackNode {
         if (output.outliers.length === 0) {
             return 'no_outliers';
         }
+        
+        // Create prompt for LLM to explain why these videos are outliers
+        const outliersText = output.outliers.map((item: any, index: number) => {
+            const metricValue = this.extractMetricValue(item, this.metric) || 0;
+            return `${index + 1}. "${item.title}" by ${item.channelTitle}
+   - Views: ${item.views.toLocaleString()}
+   - Likes: ${item.likes.toLocaleString()}
+   - ${this.metric}: ${metricValue.toLocaleString()}`;
+        }).join('\n\n');
+        
+        const prompt = `You are a YouTube research analyst. I found ${output.outliers.length} videos that are performing ${output.threshold}x better than average.
+
+Statistics:
+- Average ${this.metric}: ${output.statistics.mean.toFixed(2)}
+- Median ${this.metric}: ${output.statistics.median.toFixed(2)}
+- Threshold for outliers (${output.threshold}x median): ${(output.statistics.median * output.threshold).toFixed(2)}
+
+Outlier Videos:
+${outliersText}
+
+Please analyze why these videos are performing so well. What patterns do you notice in:
+1. The topics/titles
+2. The channels
+3. The engagement metrics (views vs likes ratio)
+
+Provide actionable insights for someone looking to create similar high-performing content.`;
+
+        this.pack('prompt', prompt);
         
         return 'complete';
     }
