@@ -94,17 +94,12 @@ Be specific and actionable.`
         });
         
         // Setup flow edges (routing)
+        // On success, flow continues through the pipeline
         searchNode.on('complete', analysisNode);
-        searchNode.on('no_results', () => {
-            console.log('❌ No results found');
-            return undefined;
-        });
-        
         analysisNode.on('complete', summaryNode);
-        analysisNode.on('no_outliers', () => {
-            console.log('⚠️  No outliers found');
-            return undefined;
-        });
+        
+        // For error/terminal actions like 'no_results' and 'no_outliers',
+        // we don't register successors - the flow will terminate gracefully
         
         // Set entry node
         this.flow.setEntryNode(searchNode);

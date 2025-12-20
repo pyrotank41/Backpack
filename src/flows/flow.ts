@@ -108,9 +108,9 @@ export class Flow<S = any> {
      * @param config - Node configuration
      * @returns Instantiated node
      */
-    addNode<T extends BackpackNode>(
-        NodeClass: typeof BackpackNode & { new(config: NodeConfig, context: NodeContext): T },
-        config: NodeConfig
+    addNode<T extends BackpackNode, C extends NodeConfig = NodeConfig>(
+        NodeClass: typeof BackpackNode & { new(config: C, context: NodeContext): T },
+        config: C
     ): T {
         // Get namespace segment from node class or config
         const segment = (NodeClass as any).namespaceSegment || config.id;

@@ -142,11 +142,11 @@ export class YouTubeSearchNode extends BackpackNode {
         const response = await fetch(`${this.baseUrl}/search?${params}`);
         
         if (!response.ok) {
-            const error = await response.json();
+            const error = await response.json() as any;
             throw new Error(error.error?.message || 'YouTube search failed');
         }
         
-        const data = await response.json();
+        const data = await response.json() as any;
         
         return data.items?.map((item: any) => ({
             id: item.id.videoId,
@@ -183,11 +183,11 @@ export class YouTubeSearchNode extends BackpackNode {
         const response = await fetch(`${this.baseUrl}/videos?${params}`);
         
         if (!response.ok) {
-            const error = await response.json();
+            const error = await response.json() as any;
             throw new Error(error.error?.message || 'YouTube videos fetch failed');
         }
         
-        const data = await response.json();
+        const data = await response.json() as any;
         
         return data.items?.map((item: any) => ({
             id: item.id,
