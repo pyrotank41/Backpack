@@ -178,109 +178,113 @@ backpackflow/
 ## Installation
 
 ```bash
-npm install backpackflow
+npm install backpackflow zod
 ```
+
+**Dependencies:**
+- `zod` - Required for data contracts and validation (v2.0+)
 
 ## Quick Start
 
-### Basic Chat Node (Original)
+### 1. Create a Simple Node with Data Contracts
 
 ```typescript
-import { ChatNode } from 'backpackflow/nodes';
-import { OpenAIProvider } from 'backpackflow/providers';
-import { Flow } from 'backpackflow';
+import { BackpackNode, NodeConfig, NodeContext } from 'backpackflow';
+import { z } from 'zod';
 
-// Create an LLM provider
-const llmProvider = new OpenAIProvider({
-    apiKey: process.env.OPENAI_API_KEY
-});
-
-// Create a chat node
-const chatNode = new ChatNode({
-    llmProvider,
-    systemMessage: 'You are a helpful assistant.'
-});
-
-// Use it in a flow
-const flow = new Flow(chatNode);
-await flow.run(storage);
-```
-
-### 🚀 New: Intelligent Agent with Tools (v1.2.0)
-
-```typescript
-import { 
-    AgentNode, 
-    MCPServerManager, 
-    createInstructorClient,
-    EventStreamer,
-    StreamEventType 
-} from 'backpackflow';
-
-// 1. Create LLM client (explicit injection)
-const instructorClient = createInstructorClient({ provider: 'openai' });
-
-// 2. Set up tool integration (optional)
-const mcpManager = new MCPServerManager();
-await mcpManager.connectToServers([/* your MCP servers */]);
-const availableTools = await mcpManager.discoverTools();
-
-// 3. Create intelligent agent
-const salesAgent = new AgentNode({
-    llmConfig: {
-        instructorClient: instructorClient
-    },
-    agentName: 'SalesAgent',
-    eventStreamer: new EventStreamer(),
-    namespace: 'sales_agent'
-});
-
-// 4. Set up real-time event streaming (optional)
-const eventStreamer = new EventStreamer();
-eventStreamer.subscribe('sales_agent', (event) => {
-    switch (event.type) {
-        case StreamEventType.PROGRESS:
-            console.log(`🔄 ${event.nodeId}: ${JSON.stringify(event.content)}`);
-            break;
-        case StreamEventType.CHUNK:
-            process.stdout.write(event.content.chunk); // Real-time response
-            break;
-        case StreamEventType.FINAL:
-            console.log(`✅ Final: ${event.content.content}`);
-            break;
+// Define your node with Zod contracts
+class GreetingNode extends BackpackNode {
+    static namespaceSegment = "greeting";
+    
+    // ✨ Explicit input/output contracts
+    static inputs = {
+        name: z.string().min(1).describe('User name')
+    };
+    
+    static outputs = {
+        greeting: z.string().describe('Generated greeting')
+    };
+    
+    async prep(shared: any) {
+        return this.unpackRequired('name'); // Runtime validation!
     }
-});
-
-// 5. Execute with shared storage
-const sharedStorage = {
-    messages: [{ role: 'user', content: 'Generate a quote for 10A MCB' }],
-    available_tools: availableTools,
-    tool_manager: mcpManager
-};
-
-const result = await salesAgent.exec(sharedStorage);
-console.log('Agent response:', result.finalAnswer);
+    
+    async _exec(name: string) {
+        return `Hello, ${name}! Welcome to BackpackFlow v2.0!`;
+    }
+    
+    async post(shared: any, prep: any, greeting: string) {
+        this.pack('greeting', greeting); // Tracked in Backpack history
+        return 'complete';
+    }
+}
 ```
 
-### Azure OpenAI Support
+### 2. Build a Flow with Event Streaming
 
 ```typescript
-import { createInstructorClient } from 'backpackflow';
+import { Flow, Backpack, EventStreamer } from 'backpackflow';
 
-// Azure OpenAI configuration
-const azureClient = createInstructorClient({
-    provider: 'azure',
-    apiKey: process.env.AZURE_OPENAI_API_KEY,
-    endpoint: process.env.AZURE_OPENAI_ENDPOINT,
-    deploymentName: 'gpt-4' // Your deployment name
+// Create observable flow
+const backpack = new Backpack({});
+const eventStreamer = new EventStreamer({ enableHistory: true });
+
+const flow = new Flow({ 
+    namespace: 'demo', 
+    backpack, 
+    eventStreamer 
 });
 
-const agent = new AgentNode({
-    llmConfig: { instructorClient: azureClient },
-    agentName: 'AzureAgent',
-    eventStreamer: new EventStreamer(), // Optional streaming
-    namespace: 'azure_agent'
+// Add node
+const greetNode = flow.addNode(GreetingNode, { id: 'greet' });
+
+// Listen to events
+eventStreamer.on('*', (event) => {
+    console.log(`[${event.type}] ${event.nodeName}`);
 });
+
+// Pack input and run
+backpack.pack('name', 'World');
+await flow.run({});
+
+// Access result
+const greeting = backpack.unpack('greeting');
+console.log(greeting); // "Hello, World! Welcome to BackpackFlow v2.0!"
+```
+
+### 3. Time-Travel Debugging
+
+```typescript
+// Get complete history
+const history = backpack.getHistory();
+console.log('All state changes:', history);
+
+// Get snapshot at specific point
+const snapshot = backpack.getSnapshot();
+console.log('Current state:', snapshot);
+
+// Diff between states
+const before = backpack.getSnapshot();
+// ... make changes ...
+const after = backpack.getSnapshot();
+const diff = backpack.diff(before, after);
+console.log('What changed:', diff);
+```
+
+### 4. Serialize to JSON
+
+```typescript
+import { FlowLoader } from 'backpackflow/serialization';
+
+const loader = new FlowLoader();
+loader.register('GreetingNode', GreetingNode);
+
+// Export complete flow structure
+const config = loader.exportFlow(flow);
+console.log(JSON.stringify(config, null, 2));
+
+// Load from config
+const loadedFlow = await loader.loadFlow(config, deps);
 ```
 
 ## Development
@@ -292,8 +296,11 @@ npm install
 # Build the project
 npm run build
 
-# Development mode (watch for changes)
-npm run dev
+# Run tests
+npm test
+
+# Run a tutorial
+npx ts-node tutorials/youtube-research-agent/youtube-research-agent.ts
 ```
 
 ## 🎓 Learning & Examples
@@ -428,17 +435,34 @@ Want to contribute, get help, or share what you're building?
 
 ## 🛠️ Contributing
 
-This is a personal side project that I work on as time permits. While contributions are welcome, please understand that development pace may be irregular and APIs may change frequently as the project evolves.
+Contributions are welcome! BackpackFlow v2.0 is feature-complete, but there's always room for:
 
-### Want to Help Build v2.0?
+- 🐛 Bug fixes and improvements
+- 📚 Documentation enhancements
+- 🎯 More example agents and tutorials
+- 🧪 Additional test coverage
+- 🚀 Performance optimizations
 
-We're actively working on three major features. Pick one that matches your interests:
+### Architecture Overview
 
-1. **[PRD-001: Backpack Architecture](./docs/prds/PRD-001-backpack-architecture.md)** - State management (no LLM knowledge needed)
-2. **[PRD-002: Telemetry System](./docs/prds/PRD-002-telemetry-system.md)** - Observability & event streaming
-3. **[PRD-003: Serialization Bridge](./docs/prds/PRD-003-serialization-bridge.md)** - Config system (good for first-time contributors)
+Want to contribute? Start by understanding the core systems:
 
-👉 **[See the Roadmap](./ROADMAP.md)** for detailed task breakdowns and timelines.
+1. **[Backpack Architecture](./docs/v2.0/prds/PRD-001-backpack-architecture.md)** - State management with Git-like history
+2. **[Event Streaming](./docs/v2.0/prds/PRD-002-telemetry-system.md)** - Observability and telemetry
+3. **[Serialization Bridge](./docs/v2.0/prds/PRD-003-serialization-bridge.md)** - Config-driven flows
+4. **[Composite Nodes](./docs/v2.0/prds/PRD-004-composite-nodes.md)** - Nested flow composition
+5. **[Flow Observability](./docs/v2.0/prds/PRD-005-complete-flow-observability.md)** - Data contracts and mappings
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feat/amazing-feature`)
+3. Make your changes
+4. Run tests (`npm test`)
+5. Build the project (`npm run build`)
+6. Submit a pull request
+
+👉 **[See the Roadmap](./ROADMAP.md)** for planned features and improvements.
 
 ## License
 
