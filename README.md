@@ -36,12 +36,29 @@ We solve these pain points with a **TypeScript-First, Config-Driven** architectu
 
 Just like Git tracks every code change with commits, Backpack tracks every data change in your agent:
 
-```typescript
-// Git workflow           // Backpack workflow
-git commit              → backpack.pack('data', value)
-git log                 → backpack.getHistory()
-git checkout abc123     → backpack.getSnapshotAtCommit('abc123')
-git diff                → backpack.diff(before, after)
+```mermaid
+graph LR
+    subgraph Git["🔧 Git (Code Versioning)"]
+        G1["git commit"] 
+        G2["git log"]
+        G3["git checkout abc123"]
+        G4["git diff"]
+    end
+    
+    subgraph Backpack["🎒 Backpack (State Versioning)"]
+        B1["backpack.pack('key', value)"]
+        B2["backpack.getHistory()"]
+        B3["backpack.getSnapshot()"]
+        B4["backpack.diff(before, after)"]
+    end
+    
+    G1 -.->|"Same Concept"| B1
+    G2 -.->|"Same Concept"| B2
+    G3 -.->|"Same Concept"| B3
+    G4 -.->|"Same Concept"| B4
+    
+    style Git fill:#f0f0f0,stroke:#333,stroke-width:2px
+    style Backpack fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
 **Why "Backpack"?** Because your agent **carries explicit data** from node to node:
@@ -110,12 +127,19 @@ Think of it as **"Git for your agent's memory"** - every data change is tracked 
 - **Access Control**: Nodes declare what they can read/write with wildcard support
 - **State Quarantine**: Isolate failed operations from downstream nodes
 
-```typescript
-// Git workflow           // Backpack workflow
-git commit              → backpack.pack('data', value)
-git log                 → backpack.getHistory()
-git checkout abc123     → backpack.getSnapshot('abc123')
-git diff                → backpack.diff(before, after)
+```mermaid
+%%{init: {'theme':'base'}}%%
+timeline
+    title Backpack State History (Like Git Log)
+    section Node A
+        Commit 1 : pack('query', 'AI agents')
+    section Node B
+        Commit 2 : pack('results', [...])
+        Commit 3 : pack('filtered', [...])
+    section Node C
+        Commit 4 : pack('summary', 'Analysis...')
+    section Time-Travel
+        Checkpoint : getSnapshot() → Rewind to any point
 ```
 
 #### 📡 Event Streaming: Complete Observability
@@ -129,6 +153,29 @@ Automatic event emission for every node lifecycle event - no manual logging need
 - **Namespace Filtering**: Subscribe to events with wildcard patterns
 - **Event History**: Built-in event storage for post-mortem debugging
 
+```mermaid
+graph LR
+    A[NODE_START] --> B[PREP_COMPLETE]
+    B --> C[EXEC_COMPLETE]
+    C --> D[NODE_END]
+    
+    B -.->|"Error in prep()"| E[ERROR]
+    C -.->|"Error in _exec()"| E
+    
+    B -->|"📋 Emits"| B1["Input data<br/>LLM prompts"]
+    C -->|"📋 Emits"| C1["Execution result<br/>Raw LLM response"]
+    D -->|"📋 Emits"| D1["Final action<br/>Duration"]
+    E -->|"📋 Emits"| E1["Error details<br/>Stack trace"]
+    
+    style A fill:#4caf50,stroke:#333,color:#fff
+    style D fill:#2196f3,stroke:#333,color:#fff
+    style E fill:#f44336,stroke:#333,color:#fff
+    style B1 fill:#fff3cd,stroke:#856404
+    style C1 fill:#fff3cd,stroke:#856404
+    style D1 fill:#d1ecf1,stroke:#0c5460
+    style E1 fill:#f8d7da,stroke:#721c24
+```
+
 #### 🔌 Config-Driven Architecture
 [📚 Documentation](./docs/v2.0/prds/PRD-003-serialization-bridge.md)
 
@@ -139,6 +186,34 @@ Bidirectional conversion between TypeScript code and JSON configs:
 - **Dependency Injection**: Clean handling of non-serializable objects (LLM clients, DBs)
 - **Round-Trip Guarantee**: `fromConfig(toConfig())` preserves node identity
 - **UI-Ready**: Foundation for drag-and-drop flow builders
+
+```mermaid
+graph LR
+    subgraph Code["💻 TypeScript Code"]
+        Node["class MyNode extends BackpackNode {<br/>  params = {...}<br/>  async _exec() {...}<br/>}"]
+    end
+    
+    subgraph Config["📄 JSON Config"]
+        JSON["{<br/>  type: 'MyNode',<br/>  id: 'node1',<br/>  params: {...},<br/>  internalFlow: {...}<br/>}"]
+    end
+    
+    subgraph UI["🎨 Visual Builder"]
+        Drag["Drag & Drop<br/>Flow Editor"]
+    end
+    
+    Node -->|"toConfig()"| JSON
+    JSON -->|"fromConfig()"| Node
+    JSON <-->|"Edit/View"| UI
+    
+    Check["✅ Round-Trip Verified:<br/>Node identity preserved"]
+    JSON -.-> Check
+    Node -.-> Check
+    
+    style Code fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Config fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style UI fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Check fill:#c8e6c9,stroke:#388e3c
+```
 
 #### 🔀 Nested Flows & Composition
 [📚 Documentation](./docs/v2.0/prds/PRD-004-composite-nodes.md)
@@ -151,6 +226,38 @@ Build complex agents from reusable components with standard patterns:
 - **FlowAction Enum**: Type-safe routing with standardized actions
 - **Query API**: `flattenNodes()`, `findNode()`, `getMaxDepth()` for flow introspection
 
+```mermaid
+graph TB
+    Entry["🚀 Entry Node"] --> Agent
+    
+    subgraph Agent["📦 YouTubeResearchAgent (Composite Node)"]
+        direction TB
+        AgentStart["▶️ _exec() called"] --> CreateFlow["createInternalFlow()"]
+        
+        subgraph InternalFlow["🔗 Internal Flow<br/>(Auto-wired: namespace, backpack, eventStreamer)"]
+            direction LR
+            Search["🔍 YouTube<br/>Search"] -->|"onComplete()"| Analysis["📊 Data<br/>Analysis"]
+            Analysis -->|"onComplete()"| Summary["🤖 LLM<br/>Summary"]
+        end
+        
+        CreateFlow --> InternalFlow
+        InternalFlow --> AgentComplete["✅ return 'complete'"]
+    end
+    
+    Agent --> Exit["🎯 Exit Node"]
+    
+    style Entry fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#fff
+    style Agent fill:#fff59d,stroke:#f57f17,stroke-width:3px
+    style InternalFlow fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Search fill:#4fc3f7,stroke:#0277bd,stroke-width:2px
+    style Analysis fill:#81c784,stroke:#388e3c,stroke-width:2px
+    style Summary fill:#ffb74d,stroke:#e65100,stroke-width:2px
+    style AgentStart fill:#e0e0e0,stroke:#616161
+    style CreateFlow fill:#e0e0e0,stroke:#616161
+    style AgentComplete fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    style Exit fill:#2196f3,stroke:#0d47a1,stroke-width:2px,color:#fff
+```
+
 #### 🔍 Data Contracts & Type Safety
 [📚 Documentation](./docs/v2.0/prds/PRD-005-complete-flow-observability.md)
 
@@ -161,6 +268,31 @@ Zod-powered input/output contracts for bulletproof type safety:
 - **Type Inference**: Full TypeScript types inferred from schemas
 - **Data Mappings**: Edge-level key remapping for flexible composition
 - **JSON Schema Export**: Generate schemas for UI form builders
+
+```mermaid
+graph LR
+    subgraph NodeA["🔷 Search Node"]
+        A1["outputs: {<br/>  query: z.string()<br/>  results: z.array(...)<br/>}"]
+    end
+    
+    subgraph Edge["🔗 Edge Mapping"]
+        E1["mappings: {<br/>  results → data<br/>}"]
+    end
+    
+    subgraph NodeB["🔶 Analysis Node"]
+        B1["inputs: {<br/>  data: z.array(...)<br/>}"]
+        B2["✅ Validated!"]
+    end
+    
+    NodeA -->|"results"| Edge
+    Edge -->|"data"| NodeB
+    B1 --> B2
+    
+    style NodeA fill:#e3f2fd,stroke:#1976d2
+    style NodeB fill:#fff3e0,stroke:#e65100
+    style Edge fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style B2 fill:#c8e6c9,stroke:#388e3c
+```
 
 ## Project Structure
 
@@ -187,6 +319,39 @@ npm install backpackflow zod
 ## Quick Start
 
 ### 1. Create a Simple Node with Data Contracts
+
+```mermaid
+sequenceDiagram
+    participant F as Flow
+    participant N as Node
+    participant B as Backpack
+    participant E as EventStreamer
+    
+    F->>N: Start execution
+    N->>E: Emit NODE_START
+    
+    rect rgb(230, 240, 255)
+        Note over N,B: prep() - Read inputs
+        N->>B: unpack('name')
+        B-->>N: 'World'
+        N->>E: Emit PREP_COMPLETE
+    end
+    
+    rect rgb(240, 255, 230)
+        Note over N: _exec() - Process
+        N->>N: Execute logic
+        N->>E: Emit EXEC_COMPLETE
+    end
+    
+    rect rgb(255, 240, 230)
+        Note over N,B: post() - Write outputs
+        N->>B: pack('greeting', result)
+        B-->>B: Commit to history
+        N->>E: Emit NODE_END
+    end
+    
+    N-->>F: Return action ('complete')
+```
 
 ```typescript
 import { BackpackNode, NodeConfig, NodeContext } from 'backpackflow';
@@ -327,6 +492,35 @@ class YouTubeResearchAgentNode extends BackpackNode {
 }
 ```
 
+```mermaid
+graph LR
+    User["👤 User<br/>'AI agents'"] --> Search["🔍 YouTube Search<br/><br/>Contract:<br/>in: query<br/>out: videos[]"]
+    
+    Search -->|"onComplete()"| Analysis["📊 Data Analysis<br/><br/>Contract:<br/>in: videos[]<br/>out: statistics"]
+    
+    Analysis -->|"onComplete()"| Summary["🤖 LLM Summary<br/><br/>Contract:<br/>in: statistics<br/>out: summary"]
+    
+    Summary --> Result["📄 Result<br/>'Found 45 videos...'"]
+    
+    subgraph Events["📡 Event Stream"]
+        E1["NODE_START × 3"]
+        E2["PREP_COMPLETE × 3"]
+        E3["EXEC_COMPLETE × 3"]
+        E4["NODE_END × 3"]
+    end
+    
+    Search -.->|"Emits"| Events
+    Analysis -.->|"Emits"| Events
+    Summary -.->|"Emits"| Events
+    
+    style Search fill:#4fc3f7,stroke:#0277bd,stroke-width:2px
+    style Analysis fill:#81c784,stroke:#388e3c,stroke-width:2px
+    style Summary fill:#ffb74d,stroke:#e65100,stroke-width:2px
+    style Events fill:#f3e5f5,stroke:#7b1fa2
+    style User fill:#fff9c4,stroke:#f57f17
+    style Result fill:#c8e6c9,stroke:#388e3c
+```
+
 **Features demonstrated:**
 - 🔀 Composite nodes with nested flows
 - ✅ Zod-based data contracts with type inference
@@ -351,6 +545,57 @@ See the `tutorials/` directory for all examples.
 ### v2.0.0 "The Observable Agent" (Current)
 
 **Major architectural rewrite** with production-grade observability and type safety.
+
+```mermaid
+graph TB
+    subgraph Flow["🔄 Flow Orchestration"]
+        N1[Node A] -->|"onComplete()"| N2[Node B]
+        N2 --> N3[Node C]
+    end
+    
+    subgraph Backpack["🎒 Backpack (State)"]
+        H1["📜 Immutable History"]
+        H2["🎯 Access Control"]
+        H3["⏱️ Time Travel"]
+    end
+    
+    subgraph Events["📡 Event Streaming"]
+        E1["NODE_START"]
+        E2["EXEC_COMPLETE"]
+        E3["ERROR"]
+    end
+    
+    subgraph Serialization["💾 Serialization"]
+        S1["toConfig() → JSON"]
+        S2["fromConfig() → Code"]
+    end
+    
+    subgraph Contracts["🔍 Data Contracts"]
+        C1["Zod Validation"]
+        C2["Edge Mappings"]
+    end
+    
+    N1 -.->|"pack()/unpack()"| Backpack
+    N2 -.->|"pack()/unpack()"| Backpack
+    N3 -.->|"pack()/unpack()"| Backpack
+    
+    N1 -.->|"emit"| Events
+    N2 -.->|"emit"| Events
+    N3 -.->|"emit"| Events
+    
+    Flow -->|"exportFlow()"| Serialization
+    Serialization -->|"loadFlow()"| Flow
+    
+    N1 --> Contracts
+    N2 --> Contracts
+    N3 --> Contracts
+    
+    style Flow fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style Backpack fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style Events fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Serialization fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style Contracts fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+```
 
 #### 🎯 Core Systems
 
