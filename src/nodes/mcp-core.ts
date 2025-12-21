@@ -90,10 +90,7 @@ class MCPClientWrapper {
                 version: "1.0.0"
             },
             {
-                capabilities: {
-                    tools: {},
-                    resources: {}
-                }
+                capabilities: {} as any  // Type assertion for MCP SDK compatibility
             }
         );
     }
