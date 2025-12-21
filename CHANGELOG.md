@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.0.0] - 2025-12-21 (Planned)
+## [2.0.0] - 2024-12-21
 
 ### 🎉 Major Release - Complete Rewrite
 
-This is a **major breaking release** that transforms BackpackFlow from a simple flow orchestrator into a production-ready, fully observable, config-driven LLM framework.
+This is a **major breaking release** that transforms BackpackFlow from a simple flow orchestrator into a production-ready, fully observable, config-driven LLM framework with complete nested flow composition and type-safe data contracts.
 
 ### ✨ Added
 
@@ -42,6 +42,31 @@ This is a **major breaking release** that transforms BackpackFlow from a simple 
 - **Version Support** - Config versioning for future migrations
 - **Example Nodes** - `SimpleChatNode` and `SimpleDecisionNode` with full serialization
 
+#### PRD-004: Composite Nodes & Nested Flows (15 tests)
+- **`createInternalFlow()`** - Standard method for creating internal flows with auto-wiring
+- **Automatic Context Inheritance** - namespace, backpack, and eventStreamer passed to internal flows
+- **`internalFlow` Property** - Public getter for accessing internal flow (read-only)
+- **`isComposite()` Helper** - Check if a node has an internal flow
+- **FlowAction Enum** - Type-safe routing actions (COMPLETE, ERROR, SUCCESS, FAILURE, RETRY, DEFAULT)
+- **Convenience Methods** - `.onComplete()`, `.onError()`, `.onSuccess()`, `.onFailure()`, `.onRetry()`
+- **Recursive Serialization** - `FlowLoader` automatically serializes nested flow hierarchies
+- **Recursive Deserialization** - `FlowLoader` reconstructs complete nested flow structures
+- **Circular Reference Detection** - Prevents infinite loops during serialization
+- **Depth Control** - Configurable max depth for nested flow serialization
+- **Query Utilities** - `flattenNodes()`, `flattenEdges()`, `findNode()`, `getCompositeNodes()`, `getMaxDepth()`
+- **Immutable Flows** - Internal flows cannot be modified after creation (design decision)
+
+#### PRD-005: Complete Flow Observability (21 tests)
+- **Enhanced Node Serialization** - `toConfig()` now exports all params (no empty params in JSON)
+- **Edge Extraction** - `FlowLoader.extractEdges()` captures complete flow graph structure
+- **Zod Data Contracts** - Nodes declare explicit input/output schemas with full TypeScript inference
+- **Runtime Validation** - Automatic validation with `ContractValidationError` and detailed error messages
+- **Type Inference** - Full TypeScript types inferred from Zod schemas
+- **Edge-Level Data Mappings** - Remap keys between connected nodes (`{ output: 'input' }`)
+- **Mapping Conflict Detection** - Prevents accidental data overwrites with clear error messages
+- **JSON Schema Export** - Generate schemas for UI form builders
+- **Backward Compatibility Removed** - Clean break from string-based type system to Zod-only
+
 ### 🔧 Changed
 
 - **BREAKING:** Replaced `SharedStore` with `Backpack` - Complete new API
@@ -53,26 +78,30 @@ This is a **major breaking release** that transforms BackpackFlow from a simple 
 
 ### 📚 Documentation
 
-- Added comprehensive PRDs for all 3 core systems
+- Added comprehensive PRDs for all 5 core systems (PRD-001 through PRD-005)
+- Added PRD-006 for documentation strategy (Docusaurus)
+- Added 8 Mermaid diagrams to README for visual clarity
 - Added technical specifications and implementation guides
 - Added decision audit trail (`DECISIONS-AUDIT-v2.0.md`)
 - Added v2.0 completion summary with use cases
 - Added CI/CD setup guide for npm publishing
 - Reorganized tutorials into `v2.0/` and `archive-v1.x/`
-- Created new observable agent demo
+- Created YouTube Research Agent tutorial demonstrating all v2.0 features
+- Updated README with v2.0 Quick Start examples and modern architecture diagrams
 
 ### 🚀 CI/CD
 
 - Added GitHub Actions workflow for automatic npm publishing
 - Added CI workflow for testing on PRs and main branch
 - Tests run on Node 18 and Node 20
-- All 237 tests must pass before publishing
+- All tests must pass before publishing
 
 ### 📊 Statistics
 
-- **Total Tests:** 237 passing (100% success rate)
-- **Code Coverage:** ~4,550 lines of production code
-- **Implementation Time:** 1 day (December 18, 2025)
+- **Total Tests:** 270+ passing (PRD-001: 175, PRD-002: 28, PRD-003: 34, PRD-004: 15, PRD-005: 21)
+- **Code Coverage:** ~6,000+ lines of production code
+- **Implementation Timeline:** December 2024 (v2.0 core) + December 21, 2024 (PRD-004 & PRD-005)
+- **Documentation:** 5 comprehensive PRDs + 8 visual diagrams + migration guides
 - **Breaking Changes:** Yes (major version bump)
 
 ### 🎯 Migration Guide
@@ -150,4 +179,6 @@ v2.0 enables powerful new use cases:
 [1.2.0]: https://github.com/pyrotank41/Backpackflow/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/pyrotank41/Backpackflow/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/pyrotank41/Backpackflow/releases/tag/v1.0.0
+
+
 

@@ -76,6 +76,13 @@ export class Flow<S = any> {
     private entryNode?: BackpackNode;
     
     /**
+     * Get the entry node ID (for serialization)
+     */
+    public getEntryNodeId(): string | undefined {
+        return this.entryNode?.id;
+    }
+    
+    /**
      * Create a new Flow
      * 
      * @param config - Flow configuration

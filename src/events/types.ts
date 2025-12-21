@@ -161,3 +161,5 @@ export interface EventStreamerOptions {
     syncEmission?: boolean;             // Emit events synchronously (default: true)
 }
 
+
+

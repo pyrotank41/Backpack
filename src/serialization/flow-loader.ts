@@ -140,6 +140,13 @@ export class FlowLoader {
                     const node = flow.addNode(NodeClass as any, nodeConfig);
                     nodeInstances.set(nodeConfig.id, node);
                 }
+                
+                // Handle internal flow (composite nodes) - PRD-004
+                if (nodeConfig.internalFlow) {
+                    const internalFlow = await this.loadFlow(nodeConfig.internalFlow, deps);
+                    // Inject internal flow into the node
+                    (nodeInstances.get(nodeConfig.id) as any)._internalFlow = internalFlow;
+                }
             } catch (error) {
                 throw new SerializationError(
                     `Failed to instantiate node '${nodeConfig.id}' of type '${nodeConfig.type}'`,
@@ -173,6 +180,17 @@ export class FlowLoader {
             
             // Setup edge using PocketFlow's .on() method
             fromNode.on(edge.condition, toNode);
+        }
+        
+        // 5. Set entry node if specified
+        if (config.entryNodeId) {
+            const entryNode = nodeInstances.get(config.entryNodeId);
+            if (!entryNode) {
+                throw new SerializationError(
+                    `Entry node '${config.entryNodeId}' not found in flow`
+                );
+            }
+            flow.setEntryNode(entryNode);
         }
         
         return flow;
@@ -377,6 +395,7 @@ export class FlowLoader {
             namespace: flow.namespace,
             nodes,
             edges,
+            entryNodeId: flow.getEntryNodeId(),
             dependencies: {}
         };
     }

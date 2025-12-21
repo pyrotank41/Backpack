@@ -88,6 +88,7 @@ export interface FlowConfig {
     namespace?: string;                // Flow namespace
     nodes: NodeConfig[];               // Node configurations
     edges: FlowEdge[];                 // Edge configurations
+    entryNodeId?: string;              // ID of the entry node
     dependencies?: DependencyManifest; // Dependency metadata
 }
 
