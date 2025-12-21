@@ -508,8 +508,11 @@ describe('PRD-004: Composite Nodes & Nested Flows', () => {
             expect(events.length).toBeGreaterThan(0);
             expect(nodeStartEvents.length).toBeGreaterThan(0);
             
-            // Verify namespaces include parent path
-            expect(namespaces.some(ns => ns && ns.includes('app.agent'))).toBe(true);
+            // Verify namespaces include parent path (should have nested flow namespaces)
+            // The parent flow has namespace 'app', the composite node uses segment 'composite',
+            // so we expect namespaces like 'app.composite' and 'app.composite.simple'
+            const hasNestedNamespace = namespaces.some(ns => ns && ns.startsWith('app.composite'));
+            expect(hasNestedNamespace).toBe(true);
         });
         
         it('should support round-trip serialization (export -> import -> export)', async () => {
