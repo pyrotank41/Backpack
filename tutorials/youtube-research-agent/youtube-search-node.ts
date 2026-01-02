@@ -3,27 +3,18 @@
  * 
  * Searches YouTube for videos and fetches detailed statistics.
  * Handles API rate limits and provides rich video metadata.
+ * 
+ * REFACTORED: Minimal format with auto-generated metadata
  */
 
 import { z } from 'zod';
 import { BackpackNode, NodeConfig, NodeContext } from '../../src/nodes/backpack-node';
 import { DataContract } from '../../src/serialization/types';
 
-export interface YouTubeSearchConfig extends NodeConfig {
-    apiKey: string;
-    maxResults?: number;
-    publishedAfter?: Date;
-}
-
-export interface YouTubeSearchInput {
-    query: string;
-    publishedAfter?: Date;
-}
-
 /**
  * YouTube Video Schema (Zod)
  * 
- * Defines the shape and validation rules for YouTube video metadata
+ * Single source of truth for video data structure
  */
 export const YouTubeVideoSchema = z.object({
     id: z.string(),
@@ -41,20 +32,17 @@ export const YouTubeVideoSchema = z.object({
 });
 
 /**
- * YouTube Video Type (inferred from Zod schema)
- * 
- * Single source of truth - type is automatically derived from schema
+ * YouTube Video Type (auto-inferred from Zod)
  */
 export type YouTubeVideo = z.infer<typeof YouTubeVideoSchema>;
 
-export interface YouTubeSearchOutput {
-    videos: YouTubeVideo[];
-    totalResults: number;
-    query: string;
-}
-
 /**
- * YouTubeSearchNode
+ * YouTubeSearchNode - Minimal Format
+ * 
+ * UI metadata auto-generated from:
+ * - Class name → "YouTube Search" (display name)
+ * - "YouTube" in name → Category: "api-client", Icon: "🎥"
+ * - Config schema → UI properties
  * 
  * Usage:
  * ```typescript
@@ -63,53 +51,68 @@ export interface YouTubeSearchOutput {
  *     apiKey: process.env.YOUTUBE_API_KEY,
  *     maxResults: 50
  * });
- * 
- * // Pack query
- * backpack.pack('searchQuery', 'AI productivity tools');
- * 
- * // Run node
- * await searchNode._run({});
- * 
- * // Get results
- * const videos = backpack.unpack('searchResults');
  * ```
  */
 export class YouTubeSearchNode extends BackpackNode {
     static namespaceSegment = "youtube.search";
     
     /**
-     * Input data contract (PRD-005 - Zod Implementation)
+     * Config Schema (AUTO-GENERATES UI PROPERTIES)
      * 
-     * Validates input data at runtime with detailed error messages
+     * Define once, UI builds automatically:
+     * - apiKey → Text input (required)
+     * - maxResults → Number input with min/max (optional, default: 50)
+     */
+    static config = z.object({
+        apiKey: z.string()
+            .min(1)
+            .describe('YouTube Data API v3 key'),
+        maxResults: z.number()
+            .min(1)
+            .max(100)
+            .default(50)
+            .describe('Maximum number of videos to fetch')
+    });
+    
+    /**
+     * Input Contract (Backpack → Node)
      */
     static inputs: DataContract = {
         searchQuery: z.string()
             .min(1)
-            .describe('YouTube search query (e.g., "AI productivity tools")')
+            .describe('YouTube search query (e.g., "AI productivity tools")'),
+        publishedAfter: z.date()
+            .optional()
+            .describe('Filter videos published after this date')
     };
     
     /**
-     * Output data contract (PRD-005 - Zod Implementation)
-     * 
-     * Defines the exact shape of output data including nested object properties
+     * Output Contract (Node → Backpack)
      */
     static outputs: DataContract = {
         searchResults: z.array(YouTubeVideoSchema)
-            .describe('Array of YouTube videos with full metadata (title, views, channel, likes, etc.)')
+            .describe('Array of YouTube videos with full metadata'),
+        searchMetadata: z.object({
+            query: z.string(),
+            totalResults: z.number(),
+            timestamp: z.date()
+        }).describe('Search metadata')
     };
     
-    private apiKey: string;
-    private maxResults: number;
+    // Runtime properties (loaded from config)
+    private apiKeyRef!: string; // Store credential reference, not the actual key
+    private maxResults!: number;
     private baseUrl = 'https://www.googleapis.com/youtube/v3';
     
-    constructor(config: YouTubeSearchConfig, context: NodeContext) {
+    constructor(config: any, context: NodeContext) {
         super(config, context);
         
-        this.apiKey = config.apiKey || process.env.YOUTUBE_API_KEY || '';
+        // Store credential reference (will be resolved at runtime)
+        this.apiKeyRef = config.apiKey || process.env.YOUTUBE_API_KEY || '';
         this.maxResults = config.maxResults ?? 50;
         
-        if (!this.apiKey) {
-            throw new Error('YouTube API key is required');
+        if (!this.apiKeyRef) {
+            throw new Error('YouTube API key is required. Set YOUTUBE_API_KEY env var or pass in config.');
         }
     }
     
@@ -128,25 +131,26 @@ export class YouTubeSearchNode extends BackpackNode {
     }
     
     /**
-     * Preparation phase: Extract search query from backpack
+     * Preparation phase: Extract inputs from backpack and resolve credentials
      */
-    async prep(shared: any): Promise<YouTubeSearchInput> {
-        const query = this.unpackRequired<string>('searchQuery');
-        const publishedAfter = this.unpack<Date>('publishedAfter');
+    async prep(shared: any) {
+        // Resolve credential at runtime (supports @cred:id, ${ENV_VAR}, or direct value)
+        const apiKey = await this.resolveCredential(this.apiKeyRef, 'youtubeApi');
         
         return {
-            query,
-            publishedAfter
+            query: this.unpackRequired<string>('searchQuery'),
+            publishedAfter: this.unpack<Date>('publishedAfter'),
+            apiKey // Include resolved API key in prep result
         };
     }
     
     /**
      * Execution phase: Search YouTube and fetch video details
      */
-    async _exec(input: YouTubeSearchInput): Promise<YouTubeSearchOutput> {
+    async _exec(input: { query: string; publishedAfter?: Date; apiKey: string }) {
         try {
-            // Step 1: Search for videos
-            const searchResults = await this.searchVideos(input.query, input.publishedAfter);
+            // Step 1: Search for videos (using resolved API key)
+            const searchResults = await this.searchVideos(input.query, input.apiKey, input.publishedAfter);
             
             if (searchResults.length === 0) {
                 return {
@@ -158,7 +162,7 @@ export class YouTubeSearchNode extends BackpackNode {
             
             // Step 2: Get detailed statistics for each video
             const videoIds = searchResults.map(v => v.id);
-            const videos = await this.getVideoDetails(videoIds);
+            const videos = await this.getVideoDetails(videoIds, input.apiKey);
             
             return {
                 videos,
@@ -174,14 +178,14 @@ export class YouTubeSearchNode extends BackpackNode {
     /**
      * Search for videos using YouTube Search API
      */
-    private async searchVideos(query: string, publishedAfter?: Date): Promise<Array<{id: string, title: string}>> {
+    private async searchVideos(query: string, apiKey: string, publishedAfter?: Date): Promise<Array<{id: string, title: string}>> {
         const params = new URLSearchParams({
             part: 'id,snippet',
             q: query,
             type: 'video',
             maxResults: this.maxResults.toString(),
             order: 'relevance',
-            key: this.apiKey
+            key: apiKey
         });
         
         if (publishedAfter) {
@@ -206,13 +210,13 @@ export class YouTubeSearchNode extends BackpackNode {
     /**
      * Get detailed statistics for videos
      */
-    private async getVideoDetails(videoIds: string[]): Promise<YouTubeVideo[]> {
+    private async getVideoDetails(videoIds: string[], apiKey: string): Promise<YouTubeVideo[]> {
         // Batch requests (YouTube allows up to 50 video IDs per request)
         const videos: YouTubeVideo[] = [];
         
         for (let i = 0; i < videoIds.length; i += 50) {
             const batch = videoIds.slice(i, i + 50);
-            const batchVideos = await this.fetchVideoBatch(batch);
+            const batchVideos = await this.fetchVideoBatch(batch, apiKey);
             videos.push(...batchVideos);
         }
         
@@ -222,11 +226,11 @@ export class YouTubeSearchNode extends BackpackNode {
     /**
      * Fetch a batch of video details
      */
-    private async fetchVideoBatch(videoIds: string[]): Promise<YouTubeVideo[]> {
+    private async fetchVideoBatch(videoIds: string[], apiKey: string): Promise<YouTubeVideo[]> {
         const params = new URLSearchParams({
             part: 'snippet,statistics,contentDetails',
             id: videoIds.join(','),
-            key: this.apiKey
+            key: apiKey
         });
         
         const response = await fetch(`${this.baseUrl}/videos?${params}`);
@@ -257,7 +261,7 @@ export class YouTubeSearchNode extends BackpackNode {
     /**
      * Post-processing phase: Store results in backpack
      */
-    async post(backpack: any, shared: any, output: YouTubeSearchOutput): Promise<string | undefined> {
+    async post(backpack: any, shared: any, output: any): Promise<string | undefined> {
         // Pack search results
         this.pack('searchResults', output.videos);
         
@@ -276,4 +280,3 @@ export class YouTubeSearchNode extends BackpackNode {
         return 'complete';
     }
 }
-

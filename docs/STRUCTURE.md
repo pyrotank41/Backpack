@@ -13,6 +13,7 @@ docs/
 │
 ├── README.md                       # Main documentation hub
 ├── STRUCTURE.md                    # This file
+├── STUDIO-AGENT-GUIDE.md           # 🆕 Making agents Studio-compatible
 │
 ├── v2.0/                          # ✅ Current Development (Dec 21, 2025)
 │   ├── README.md                   # v2.0 documentation index
@@ -53,14 +54,14 @@ docs/
 
 ## 📊 Document Counts by Category
 
-| Category | v2.0 | v2.1 | Legacy | Total |
-|----------|------|------|--------|-------|
-| **PRDs** | 6 | 0 | 1 | 7 |
-| **Tech Specs** | 2 | 0 | 0 | 2 |
-| **Guides** | 6 | 0 | 0 | 6 |
-| **Migration** | 2 | 0 | 0 | 2 |
-| **READMEs** | 1 | 1 | 1 | 3 |
-| **Total** | 17 | 1 | 2 | **20** |
+| Category | Root | v2.0 | v2.1 | Legacy | Total |
+|----------|------|------|------|--------|-------|
+| **PRDs** | 0 | 6 | 0 | 1 | 7 |
+| **Tech Specs** | 0 | 2 | 0 | 0 | 2 |
+| **Guides** | 1 | 6 | 0 | 0 | 7 |
+| **Migration** | 0 | 2 | 0 | 0 | 2 |
+| **READMEs** | 1 | 1 | 1 | 1 | 4 |
+| **Total** | 2 | 17 | 1 | 2 | **22** |
 
 ---
 

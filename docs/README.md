@@ -6,13 +6,22 @@ Welcome to the BackpackFlow documentation hub!
 
 ---
 
+## 🎯 Quick Start Guides
+
+**Universal guides that apply to all versions:**
+
+- 🎨 **[Studio Agent Guide](./STUDIO-AGENT-GUIDE.md)** - Make any agent compatible with Backpack Studio
+
+---
+
 ## 📂 Documentation by Version
 
 ```
 docs/
-├── v2.0/           # 🚧 Current Development (Dec 21, 2025)
-├── v2.1/           # 🔮 Future Release (Q1 2026)
-└── legacy/         # 📦 Archived (pre-v2.0)
+├── v2.0/           # ✅ Complete (Dec 21, 2025)
+├── v2.1/           # ✅ Complete (Dec 30, 2025) - Node Metadata System
+├── legacy/         # 📦 Archived (pre-v2.0)
+└── archive/        # 📦 Draft/working documents
 ```
 
 ---
@@ -60,16 +69,28 @@ v2.0/
 
 ---
 
-## 🔮 v2.1 - Future Release
+## ✨ v2.1 - Node Metadata & Studio UI
 
-**Status:** Planned  
-**Target Release:** Q1 2026
+**Status:** ✅ Complete  
+**Release Date:** December 30, 2025
 
-### Planned Features
+### Key Features
 
-- **Enhanced Observability** - Web-based tracer UI, event persistence, trace replay
-- **Advanced Routing** - JSON Logic edge conditions, deep namespace matching
-- **Hot-Reloading** - Swap configs in running agents
+- **Auto-Generated Metadata** - Define once with Zod, everything else auto-generates
+- **NodeRegistry** - Central catalog for node discovery and search
+- **AI-First Design** - Enable AI agents to discover and compose nodes programmatically
+- **83% Code Reduction** - Eliminate boilerplate for node definitions
+- **Studio UI** - Web-based flow orchestration with real-time telemetry visualization
+
+### Quick Links
+
+- 📖 **[v2.1 Documentation Hub](./v2.1/README.md)** - Start here!
+- 📋 **[PRD-007: Node Metadata System](./v2.1/prds/PRD-007-node-metadata-system.md)** - Requirements
+- ✅ **[Implementation Summary](./v2.1/NODE-METADATA-IMPLEMENTATION-SUMMARY.md)** - Technical details
+- 🔄 **[Migration Guide](./v2.1/node-restructuring-guide.md)** - Upgrade from v2.0
+- 🎯 **[AI-First Architecture](./v2.1/ai-first-architecture.md)** - Strategic vision
+- 📝 **[Node Conventions](./v2.1/node-conventions.md)** - Naming standards
+- 🎨 **[Studio UI](./v2.1/studio-ui.md)** - Web interface for flow orchestration
 
 **Full details:** See [v2.1/README.md](./v2.1/README.md)
 
@@ -137,5 +158,12 @@ Archived documentation from pre-v2.0:
 
 ---
 
-**Last Updated:** December 18, 2025  
-**Current Version:** v2.0 (in development)
+## 📦 Archive
+
+Historical and draft documents moved to `archive/`:
+- **[v2.1-drafts](./archive/v2.1-drafts/)** - Working drafts from v2.1 development (consolidated)
+
+---
+
+**Last Updated:** December 30, 2025  
+**Current Version:** v2.1 (complete)

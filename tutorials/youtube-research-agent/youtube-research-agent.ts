@@ -49,18 +49,16 @@ class YouTubeResearchAgentNode extends BackpackNode {
     }
     
     async prep(shared: any): Promise<any> {
-        // Get query from backpack
-        const query = this.unpackRequired<string>('searchQuery');
+        // Get query from backpack (inputKey from metadata.json)
+        const query = this.unpackRequired<string>('query');
         return { query };
     }
-    
-    async _exec(input: any): Promise<any> {
-        // ✨ Create internal flow using standard helper (PRD-004)
-        // This automatically inherits namespace, backpack, and eventStreamer
-        // If we're at "youtube.research.agent", internal nodes become:
-        // - "youtube.research.agent.search"
-        // - "youtube.research.agent.analysis"
-        // - "youtube.research.agent.summary"
+
+    /**
+     * Setup the internal flow structure.
+     * This allows the Studio to introspect the graph before execution.
+     */
+    setupInternalFlow(): Flow {
         const internalFlow = this.createInternalFlow();
         
         // 1. YouTube Search Node
@@ -88,17 +86,37 @@ class YouTubeResearchAgentNode extends BackpackNode {
 - Engagement patterns
 - Content uniqueness
 
-Be specific and actionable.`
+Be specific and actionable.
+
+reapond in markdown format
+`
         });
         
         // ✨ Setup flow edges using convenience methods (PRD-004)
         searchNode.onComplete(analysisNode);
         analysisNode.onComplete(summaryNode);
         
-        // Set entry node and run
+        // Set entry node
         internalFlow.setEntryNode(searchNode);
+
+        return internalFlow;
+    }
+    
+    async _exec(input: any): Promise<any> {
+        // Pack query for internal search node
+        const query = input.query;
+        this.backpack.pack('searchQuery', query, { nodeId: this.id });
+        
+        // ✨ Get or create internal flow
+        const internalFlow = this.internalFlow || this.setupInternalFlow();
         
         await internalFlow.run({});
+        
+        // Pack final output to Studio-compatible key (outputKey from metadata.json)
+        const chatResponse = this.backpack.unpack('chatResponse');
+        if (chatResponse) {
+            this.backpack.pack('analysis', chatResponse, { nodeId: this.id });
+        }
         
         return { success: true };
     }
@@ -262,8 +280,8 @@ class YouTubeResearchAgent {
         console.log(`Query: "${query}"\n`);
         
         try {
-            // Pack initial input
-            this.backpack.pack('searchQuery', query, {
+            // Pack initial input (inputKey from metadata.json)
+            this.backpack.pack('query', query, {
                 nodeId: 'user-input',
                 nodeName: 'UserInput'
             });
@@ -412,7 +430,7 @@ class YouTubeResearchAgent {
         const statistics = this.backpack.unpack('statistics');
         const outliers = this.backpack.unpack('outliers');
         const insights = this.backpack.unpack('insights');
-        const summary = this.backpack.unpack('chatResponse');
+        const summary = this.backpack.unpack('analysis'); // Use Studio-compatible outputKey
         
         // Display search metadata
         if (searchMetadata) {
@@ -519,5 +537,5 @@ if (require.main === module) {
     });
 }
 
-export { YouTubeResearchAgent };
+export { YouTubeResearchAgent, YouTubeResearchAgentNode };
 

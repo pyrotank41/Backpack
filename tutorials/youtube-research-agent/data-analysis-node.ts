@@ -3,6 +3,8 @@
  * 
  * Analyzes datasets to find outliers and generate insights.
  * Supports multiple metrics and configurable thresholds.
+ * 
+ * REFACTORED: Minimal format with auto-generated metadata
  */
 
 import { z } from 'zod';
@@ -10,36 +12,30 @@ import { BackpackNode, NodeConfig, NodeContext } from '../../src/nodes/backpack-
 import { DataContract } from '../../src/serialization/types';
 import { YouTubeVideoSchema, YouTubeVideo } from './youtube-search-node';
 
-export interface DataAnalysisConfig extends NodeConfig {
-    metric: string;
-    threshold?: number; // multiplier for outlier detection (default: 10)
-}
+/**
+ * Statistics Schema (Zod)
+ * 
+ * Single source of truth for statistics data structure
+ */
+const StatisticsSchema = z.object({
+    mean: z.number(),
+    median: z.number(),
+    stdDev: z.number(),
+    min: z.number(),
+    max: z.number(),
+    total: z.number(),
+    count: z.number()
+});
 
-export interface DataAnalysisInput {
-    data: any[];
-    metric: string;
-    threshold: number;
-}
-
-export interface Statistics {
-    mean: number;
-    median: number;
-    stdDev: number;
-    min: number;
-    max: number;
-    total: number;
-    count: number;
-}
-
-export interface DataAnalysisOutput {
-    outliers: any[];
-    statistics: Statistics;
-    insights: string[];
-    threshold: number;
-}
+export type Statistics = z.infer<typeof StatisticsSchema>;
 
 /**
- * DataAnalysisNode
+ * DataAnalysisNode - Minimal Format
+ * 
+ * UI metadata auto-generated from:
+ * - Class name → "Data Analysis" (display name)
+ * - "Analysis" in name → Category: "analysis", Icon: "📊"
+ * - Config schema → UI properties
  * 
  * Usage:
  * ```typescript
@@ -48,24 +44,30 @@ export interface DataAnalysisOutput {
  *     metric: 'views',
  *     threshold: 10  // 10x median = outlier
  * });
- * 
- * // Pack data
- * backpack.pack('dataToAnalyze', videos);
- * 
- * // Run node
- * await analysisNode._run({});
- * 
- * // Get outliers
- * const outliers = backpack.unpack('outliers');
  * ```
  */
 export class DataAnalysisNode extends BackpackNode {
     static namespaceSegment = "analysis";
     
     /**
-     * Input data contract (PRD-005 - Zod Implementation)
+     * Config Schema (AUTO-GENERATES UI PROPERTIES)
      * 
-     * Reuses YouTubeVideoSchema for type safety and validation
+     * Define once, UI builds automatically:
+     * - metric → Text input (required)
+     * - threshold → Number input with min (optional, default: 10)
+     */
+    static config = z.object({
+        metric: z.string()
+            .default('views')
+            .describe('Metric to analyze (e.g., "views", "likes", "comments")'),
+        threshold: z.number()
+            .min(1)
+            .default(10)
+            .describe('Outlier threshold multiplier (e.g., 10 = 10x channel average)')
+    });
+    
+    /**
+     * Input Contract (Backpack → Node)
      */
     static inputs: DataContract = {
         searchResults: z.array(YouTubeVideoSchema)
@@ -74,21 +76,13 @@ export class DataAnalysisNode extends BackpackNode {
     };
     
     /**
-     * Output data contract (PRD-005 - Zod Implementation)
-     * 
-     * Defines exact structure of all outputs including nested objects
+     * Output Contract (Node → Backpack)
      */
     static outputs: DataContract = {
         outliers: z.array(YouTubeVideoSchema)
             .describe('Videos identified as breakthrough content (performing above channel baseline)'),
-        statistics: z.object({
-            mean: z.number(),
-            median: z.number(),
-            stdDev: z.number(),
-            min: z.number(),
-            max: z.number(),
-            count: z.number()
-        }).describe('Statistical summary of video performance across all videos'),
+        statistics: StatisticsSchema
+            .describe('Statistical summary of video performance across all videos'),
         insights: z.array(z.string())
             .describe('Generated insights about patterns in breakthrough videos'),
         outlierThreshold: z.number()
@@ -98,13 +92,15 @@ export class DataAnalysisNode extends BackpackNode {
             .describe('Generated prompt for LLM to analyze and explain the outliers')
     };
     
-    private metric: string;
-    private threshold: number;
+    // Runtime properties (loaded from config)
+    private metric!: string;
+    private threshold!: number;
     
-    constructor(config: DataAnalysisConfig, context: NodeContext) {
+    constructor(config: any, context: NodeContext) {
         super(config, context);
         
-        this.metric = config.metric;
+        // Extract validated config
+        this.metric = config.metric ?? 'views';
         this.threshold = config.threshold ?? 10;
     }
     
@@ -125,11 +121,9 @@ export class DataAnalysisNode extends BackpackNode {
     /**
      * Preparation phase: Extract data from backpack
      */
-    async prep(shared: any): Promise<DataAnalysisInput> {
-        const data = this.unpackRequired<any[]>('searchResults');
-        
+    async prep(shared: any) {
         return {
-            data,
+            data: this.unpackRequired<any[]>('searchResults'),
             metric: this.metric,
             threshold: this.threshold
         };
@@ -138,7 +132,7 @@ export class DataAnalysisNode extends BackpackNode {
     /**
      * Execution phase: Analyze data and find outliers
      */
-    async _exec(input: DataAnalysisInput): Promise<DataAnalysisOutput> {
+    async _exec(input: { data: any[]; metric: string; threshold: number }) {
         const { data, metric, threshold } = input;
         
         if (!data || data.length === 0) {
@@ -331,7 +325,7 @@ export class DataAnalysisNode extends BackpackNode {
     /**
      * Post-processing phase: Store results in backpack
      */
-    async post(backpack: any, shared: any, output: DataAnalysisOutput): Promise<string | undefined> {
+    async post(backpack: any, shared: any, output: any): Promise<string | undefined> {
         // Pack outliers
         this.pack('outliers', output.outliers);
         
@@ -385,4 +379,3 @@ Provide actionable insights for someone looking to create similar high-performin
         return 'complete';
     }
 }
-

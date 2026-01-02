@@ -1,0 +1,40 @@
+{
+  "$schema": "https://backpackflow.dev/schemas/agent-metadata.json",
+  "id": "youtube-research",
+  "name": "YouTube Research Agent",
+  "description": "Find breakthrough YouTube videos in any niche using channel-relative outlier analysis",
+  "version": "1.0.0",
+  
+  "triggers": [
+    {
+      "type": "chat",
+      "inputType": "text",
+      "inputKey": "query",
+      "description": "User provides a YouTube search query (e.g., 'AI productivity tools')"
+    }
+  ],
+  
+  "outputs": {
+    "chat": {
+      "outputKey": "analysis",
+      "format": "markdown",
+      "streaming": true
+    }
+  },
+  
+  "behavior": {
+    "preserveState": true,
+    "timeout": 60000,
+    "retryable": false
+  },
+  
+  "tags": ["youtube", "research", "video", "analytics", "viral", "content"],
+  "author": "Karan Singh Kochar",
+  
+  "requirements": {
+    "env": ["YOUTUBE_API_KEY", "OPENAI_API_KEY", "EXA_API_KEY"],
+    "dependencies": ["openai", "exa-js"]
+  }
+}
+
+
