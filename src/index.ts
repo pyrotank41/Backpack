@@ -88,3 +88,37 @@ export type {
     SerializableNode,
     SerializableNodeClass
 } from './serialization'; 
+
+// v2.1: Node Metadata System (Auto-generation from Zod schemas)
+export { NodeRegistry } from './nodes/registry';
+export type { NodeMetadata } from './nodes/registry';
+export { generateNodeMetadata } from './utils/node-metadata-generator';
+export { zodToProperties } from './utils/zod-to-properties';
+
+// v2.1: Node Metadata Types
+export type {
+    NodeDescription,
+    NodeProperty,
+    DataContract,
+    FullNodeMetadata
+} from './types/node-metadata';
+
+// v2.1: Credential Management System
+export {
+    CredentialManager,
+    CredentialResolver,
+    CredentialValidationError,
+    CredentialNotFoundError,
+    CredentialTypeMismatchError,
+    BUILT_IN_CREDENTIAL_TYPES,
+    getCredentialType,
+    getCredentialTypesByCategory
+} from './credentials';
+
+// v2.1: Credential Types
+export type {
+    Credential,
+    CredentialField,
+    CredentialType,
+    CredentialManagerOptions
+} from './credentials'; 

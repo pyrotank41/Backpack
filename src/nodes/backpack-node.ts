@@ -19,7 +19,11 @@ import { Backpack } from '../storage/backpack';
 import { PackOptions } from '../storage/types';
 import { DataContract, ContractValidationError } from '../serialization/types';
 import type { Flow } from '../flows/flow';  // Forward reference to avoid circular dependency
-
+import { NodeDescription } from '../types/node-metadata';
+import { generateNodeMetadata } from '../utils/node-metadata-generator';
+import { z } from 'zod';
+import { CredentialResolver } from '../credentials/credential-resolver';
+import type { CredentialManager } from '../credentials/credential-manager'; 
 /**
  * Context passed to BackpackNode during instantiation
  */
@@ -27,6 +31,7 @@ export interface NodeContext {
     namespace: string;        // Full namespace path (e.g., "sales.researchAgent.chat")
     backpack: Backpack;       // Shared Backpack instance
     eventStreamer?: any;      // Optional event streamer (Phase 6)
+    credentialManager?: CredentialManager;  // Optional credential manager (v2.1)
 }
 
 /**
@@ -66,6 +71,21 @@ export class BackpackNode<S = any> extends BaseNode<S> {
     static namespaceSegment?: string;
     
     /**
+     * Config schema (Zod) - NEW PATTERN
+     * 
+     * Define node configuration once, UI properties auto-generate.
+     * 
+     * Example:
+     * ```typescript
+     * static config = z.object({
+     *     apiKey: z.string().describe('Your API key'),
+     *     maxResults: z.number().min(1).max(100).default(50)
+     * });
+     * ```
+     */
+    static config?: z.ZodObject<any>;
+    
+    /**
      * Input data contract (PRD-005 Issue #3)
      * 
      * Declares what data this node expects from the Backpack
@@ -74,8 +94,8 @@ export class BackpackNode<S = any> extends BaseNode<S> {
      * Example:
      * ```typescript
      * static inputs: DataContract = {
-     *     userQuery: { type: 'string', required: true, description: 'User question' },
-     *     context: { type: 'object', required: false }
+     *     userQuery: z.string().describe('User question'),
+     *     context: z.object({}).optional()
      * };
      * ```
      */
@@ -90,11 +110,27 @@ export class BackpackNode<S = any> extends BaseNode<S> {
      * Example:
      * ```typescript
      * static outputs: DataContract = {
-     *     chatResponse: { type: 'string', required: true, description: 'LLM response' }
+     *     chatResponse: z.string().describe('LLM response')
      * };
      * ```
      */
     static outputs?: DataContract;
+    
+    /**
+     * Get node metadata for UI and AI agents (AUTO-GENERATED)
+     * 
+     * Automatically generates metadata from:
+     * - Class name → display name, category, icon
+     * - Config schema → UI properties
+     * - Inputs/outputs → data contracts
+     * 
+     * Override this method to provide custom metadata.
+     * 
+     * @returns Complete node description
+     */
+    static getMetadata(): NodeDescription {
+        return generateNodeMetadata(this);
+    }
     
     /**
      * Node ID (unique within the flow)
@@ -117,6 +153,16 @@ export class BackpackNode<S = any> extends BaseNode<S> {
      * Event streamer for telemetry (Phase 6)
      */
     protected readonly eventStreamer?: any;
+    
+    /**
+     * Credential resolver for flexible credential resolution (v2.1)
+     * 
+     * Resolves credentials from multiple sources:
+     * - Direct values (backward compatible)
+     * - Environment variables (${VAR})
+     * - Managed credentials (@cred:id)
+     */
+    protected readonly credentialResolver: CredentialResolver;
     
     /**
      * Internal flow for composite nodes (PRD-004)
@@ -150,6 +196,49 @@ export class BackpackNode<S = any> extends BaseNode<S> {
         this.namespace = context.namespace;
         this.backpack = context.backpack;
         this.eventStreamer = context.eventStreamer;
+        
+        // Initialize credential resolver (v2.1)
+        this.credentialResolver = new CredentialResolver(context.credentialManager);
+        
+        // Auto-validate config against schema (if defined)
+        const constructor = this.constructor as typeof BackpackNode;
+        if (constructor.config) {
+            this.validateConfig(config, constructor.config);
+        }
+    }
+    
+    /**
+     * Validate node config against Zod schema
+     * 
+     * @param config - Node configuration
+     * @param schema - Zod schema for config
+     * @throws Error if validation fails
+     */
+    private validateConfig(config: NodeConfig, schema: z.ZodObject<any>): void {
+        try {
+            // Extract config without 'id' field
+            const { id, ...nodeConfig } = config;
+            
+            // Validate with Zod
+            const result = schema.safeParse(nodeConfig);
+            
+            if (!result.success) {
+                const errors = result.error.issues.map(issue => {
+                    const path = issue.path.length > 0 
+                        ? `${issue.path.join('.')}: ` 
+                        : '';
+                    return `${path}${issue.message}`;
+                });
+                
+                throw new Error(
+                    `Config validation failed for node '${this.id}' (${this.constructor.name}):\n` +
+                    errors.map(e => `  - ${e}`).join('\n')
+                );
+            }
+        } catch (error) {
+            console.error('[BackpackNode] Config validation error:', error);
+            throw error;
+        }
     }
     
     /**
@@ -273,32 +362,39 @@ export class BackpackNode<S = any> extends BaseNode<S> {
         const backpackReads: string[] = [];
         const backpackWrites: string[] = [];
         
-        // Store original methods
+        // Capture node identity before creating wrappers
+        const nodeId = this.id;
+        const nodeName = this.constructor.name;
+        const nodeNamespace = this.namespace;
+        
+        // Store original methods with .bind() to capture them before replacement
         const originalPack = this.backpack.pack.bind(this.backpack);
-        const originalUnpack = this.backpack.unpack.bind(this.backpack);
-        const originalUnpackRequired = this.backpack.unpackRequired.bind(this.backpack);
+        const originalUnpack: <V = any>(key: string, nodeId?: string) => V | undefined = 
+            this.backpack.unpack.bind(this.backpack);
+        const originalUnpackRequired: <V = any>(key: string, nodeId?: string) => V = 
+            this.backpack.unpackRequired.bind(this.backpack);
         
         // Create wrapper for pack() that tracks writes
         const wrappedPack = (key: string, value: any, options?: PackOptions): void => {
             backpackWrites.push(key);
             return originalPack(key, value, {
                 ...options,
-                nodeId: options?.nodeId || this.id,
-                nodeName: options?.nodeName || this.constructor.name,
-                namespace: options?.namespace || this.namespace
+                nodeId: options?.nodeId || nodeId,
+                nodeName: options?.nodeName || nodeName,
+                namespace: options?.namespace || nodeNamespace
             });
         };
         
         // Create wrapper for unpack() that tracks reads
-        const wrappedUnpack = <V = any>(key: string, nodeId?: string): V | undefined => {
+        const wrappedUnpack = <V = any>(key: string, nodeIdParam?: string): V | undefined => {
             backpackReads.push(key);
-            return originalUnpack<V>(key, nodeId || this.id);
+            return originalUnpack<V>(key, nodeIdParam || nodeId);
         };
         
         // Create wrapper for unpackRequired() that tracks reads
-        const wrappedUnpackRequired = <V = any>(key: string, nodeId?: string): V => {
+        const wrappedUnpackRequired = <V = any>(key: string, nodeIdParam?: string): V => {
             backpackReads.push(key);
-            return originalUnpackRequired<V>(key, nodeId || this.id);
+            return originalUnpackRequired<V>(key, nodeIdParam || nodeId);
         };
         
         // Temporarily replace methods
@@ -576,6 +672,34 @@ export class BackpackNode<S = any> extends BaseNode<S> {
      */
     protected unpackByNamespace(pattern: string): Record<string, any> {
         return this.backpack.unpackByNamespace(pattern, this.id);
+    }
+    
+    /**
+     * Helper method: Resolve credential value (v2.1)
+     * 
+     * Transparently resolves credentials from multiple sources:
+     * - Direct values: "AIzaSy..."
+     * - Environment variables: "${YOUTUBE_API_KEY}"
+     * - Managed credentials: "@cred:youtube-api"
+     * 
+     * @param value - Credential value or reference
+     * @param credentialType - Expected credential type (optional, for validation)
+     * @returns Resolved credential value
+     * 
+     * @example
+     * ```typescript
+     * // In node's prep() method:
+     * this.apiKey = await this.resolveCredential(
+     *     this.config.apiKey,
+     *     'youtubeApi'
+     * );
+     * ```
+     */
+    protected async resolveCredential(
+        value: string,
+        credentialType?: string
+    ): Promise<string> {
+        return await this.credentialResolver.resolve(value, credentialType);
     }
 }
 

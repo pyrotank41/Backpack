@@ -18,6 +18,7 @@
 import { Backpack } from '../storage/backpack';
 import { BackpackNode, NodeConfig, NodeContext } from '../nodes/backpack-node';
 import { BaseStorage } from '../storage/types';
+import type { CredentialManager } from '../credentials/credential-manager';
 
 /**
  * Flow configuration
@@ -32,6 +33,7 @@ export interface FlowConfig {
     };
     initialData?: BaseStorage;    // Initial data for new Backpack
     eventStreamer?: any;          // Event streamer for telemetry
+    credentialManager?: CredentialManager;  // Credential manager (v2.1)
 }
 
 /**
@@ -66,6 +68,11 @@ export class Flow<S = any> {
     private readonly eventStreamer?: any;
     
     /**
+     * Credential manager (v2.1)
+     */
+    private readonly credentialManager?: CredentialManager;
+    
+    /**
      * Registry of nodes in this flow
      */
     private readonly nodes: Map<string, BackpackNode> = new Map();
@@ -90,6 +97,7 @@ export class Flow<S = any> {
     constructor(config: FlowConfig = {}) {
         this.namespace = config.namespace || '';
         this.eventStreamer = config.eventStreamer;
+        this.credentialManager = config.credentialManager;
         
         // Use existing Backpack or create new one
         if (config.backpack) {
@@ -129,7 +137,8 @@ export class Flow<S = any> {
         const context: NodeContext = {
             namespace: fullNamespace,
             backpack: this.backpack,
-            eventStreamer: this.eventStreamer
+            eventStreamer: this.eventStreamer,
+            credentialManager: this.credentialManager
         };
         
         // Instantiate node
