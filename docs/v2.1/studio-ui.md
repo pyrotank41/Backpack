@@ -40,11 +40,23 @@ BackpackFlow Studio v2.1 provides a web-based interface for building, visualizin
 - **Soft Borders**: Refined light mode appearance
 - **Custom Scrollbars**: Theme-aware styling
 
-### 5. **Layout & UX**
-- **Resizable Panels**: Drag-to-resize sidebar
+### 5. **Node Palette & Discovery**
+- **Categorized Nodes**: Nodes grouped by category (Tools, LLMs, Agents, etc.)
+- **Searchable**: Instant search through the node catalog
+- **Drag-and-Drop**: Drag nodes from the palette into the flow graph
+- **Metadata Integration**: Pulls display names, icons, and colors from v2.1 Node Metadata
+
+### 6. **Credential Management UI**
+- **Centralized View**: Dedicated page for managing API keys and secrets
+- **Secure Handling**: UI for adding/editing encrypted credentials
+- **Integration**: Link directly to node configuration requirements
+
+### 7. **Layout & UX**
+- **Vertical Navigation Rail**: IDE-style vertical rail for sidebars
+- **Persistent State**: Sidebars remember collapsed/expanded states across refreshes
+- **Resizable Panels**: Smooth drag-to-resize interactions
 - **Unified Menu Bar**: IDE-style consistent header
-- **Responsive Design**: Adapts to different screen sizes
-- **Tab System**: Switch between Chat/Graph/Telemetry views
+- **Hydration Fix**: Zero-flash initialization for stable graph scaling
 
 ---
 
@@ -184,27 +196,15 @@ npm start
    - Smooth transitions
    - Consistent styling
 
-### 🚧 Known Limitations
+1. **Limited Node Editing**
+   - Cannot delete nodes visually yet
+   - Edge removal is manual
+   - Node property editing is functional but basic
 
-1. **No Node Editing**
-   - Cannot add/remove nodes visually
-   - Flow structure is read-only
-   - Must edit code to change flows
-
-2. **No Node Palette**
-   - Cannot drag-and-drop nodes
-   - NodeRegistry not yet integrated
-   - No visual node browser
-
-3. **Limited Flow Management**
-   - No save/load functionality
-   - No flow templates
+2. **Flow Persistence**
+   - Cannot save modified flows back to disk yet
+   - No multi-flow management dashboard
    - No version control UI
-
-4. **Basic Error Handling**
-   - Limited error messages
-   - No retry mechanisms
-   - Basic validation only
 
 ---
 
@@ -293,30 +293,16 @@ studio/
 
 ## 🔗 Integration with v2.1 Features
 
-### NodeRegistry Integration (Ready)
-The Studio is designed to integrate with NodeRegistry:
+### NodeRegistry Integration (✅ IMPLEMENTED)
+The Studio now integrates with NodeRegistry to populate the palette:
 
 ```typescript
-// Future: Node palette population
+// Node palette population
 const nodesByCategory = NodeRegistry.listByCategory();
-
-// Render categorized palette
-{Object.entries(nodesByCategory).map(([category, nodes]) => (
-  <NodeCategory name={category}>
-    {nodes.map(node => (
-      <NodeButton
-        icon={node.icon}
-        name={node.displayName}
-        color={node.defaults.color}
-        onDragStart={() => startDrag(node)}
-      />
-    ))}
-  </NodeCategory>
-))}
 ```
 
-### Auto-Generated Forms (Ready)
-Property forms can auto-generate from node metadata:
+### Auto-Generated Forms (✅ PARTIAL)
+Property forms auto-generate from node metadata for active nodes.
 
 ```typescript
 // Future: Node configuration UI
@@ -375,5 +361,5 @@ Built with:
 
 ---
 
-**Last Updated**: December 30, 2025  
-**Status**: Functional for flow monitoring and debugging
+**Last Updated**: January 7, 2026  
+**Status**: Highly Functional for flow monitoring, discovery, and debugging

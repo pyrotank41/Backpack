@@ -103,4 +103,4 @@ See `tutorials/youtube-research-agent/` for 3 refactored nodes:
 
 ---
 
-**Last Updated**: December 30, 2025
+**Last Updated**: January 7, 2026

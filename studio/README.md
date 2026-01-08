@@ -7,13 +7,18 @@
 ## ✅ **What's Built**
 
 ### **Core Infrastructure**
-- ✅ Next.js 16 + React 19 + TailwindCSS
+- ✅ Next.js 15 + React 19 + TailwindCSS
 - ✅ TypeScript with strict mode
 - ✅ Local BackpackFlow integration (`file:..`)
 - ✅ Session management (Backpack as single source of truth)
 - ✅ Agent discovery (scans `/tutorials/` for `metadata.json`)
 - ✅ Agent loader (dynamic import + Flow creation)
 - ✅ Conversation reconstruction from Backpack commits
+- ✅ **React Flow Graph Visualization**
+- ✅ **Real-Time Hierarchical Telemetry**
+- ✅ **Node Metadata & Palette System**
+- ✅ **Secure Credential Management UI**
+- ✅ **Persistent Sidebar State & Layout**
 
 ### **API Routes**
 - ✅ `GET /api/agents` - List all discovered agents
@@ -150,16 +155,15 @@ export const AGENT_REGISTRY: Record<string, any> = {
 
 ## 🎯 **Current Features**
 
-| Feature | Status | Description |
-|---------|--------|-------------|
 | **Agent Discovery** | ✅ | Auto-scan `/tutorials/` for agents |
 | **Chat Interface** | ✅ | Talk to agents conversationally |
 | **Multi-turn** | ✅ | Backpack persists across messages |
 | **Markdown** | ✅ | Renders agent responses |
 | **Session Management** | ✅ | Backpack-based (no manual state) |
-| **Time-travel** | 🔮 | Query at any timestamp (future) |
-| **Flow Visualization** | 🔮 | See nodes executing (future) |
-| **Event Stream** | 🔮 | Real-time debug (future) |
+| **Flow Visualization** | ✅ | Real-time React Flow graph |
+| **Event Stream** | ✅ | Hierarchical telemetry sidebar |
+| **Node Palette** | ✅ | Drag-and-drop node discovery |
+| **Credentials** | ✅ | Manage API keys securely |
 
 ---
 
@@ -230,6 +234,6 @@ If you see `uv_interface_addresses` error on startup, it's usually just a warnin
 
 ---
 
-**Built with ❤️ using BackpackFlow v2.0**
+**Built with ❤️ using BackpackFlow v2.1**
 
-**Questions?** Check `docs/studio/v0/` for complete documentation.
+**Questions?** Check `docs/v2.1/` for complete documentation.
